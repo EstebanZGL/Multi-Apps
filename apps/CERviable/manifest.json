@@ -1,0 +1,8 @@
+{
+    "id": "CERviable",
+    "name": "CERviable",
+    "description": "Automatisez vos rapports CER à partir de documents Prosit.",
+    "icon_text": "📄",
+    "entry_point": "app",
+    "class_name": "CERAutomatorApp"
+}

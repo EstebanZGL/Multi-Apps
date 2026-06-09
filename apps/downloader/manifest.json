@@ -1,0 +1,8 @@
+{
+    "id": "downloader",
+    "name": "Downloader Universel",
+    "description": "Téléchargez des vidéos et de la musique depuis YouTube, TikTok, Instagram, etc.",
+    "icon_text": "📥",
+    "entry_point": "app",
+    "class_name": "DownloaderApp"
+}

@@ -1,0 +1,33 @@
+# Build and Dist folders
+build/
+dist/
+build_installer/
+
+# PyInstaller files
+*.spec
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Binaries and Heavy files (FFmpeg, Backups)
+bin/
+backup_v1/
+*.zip
+*.exe
+
+# Private Data & Configs
+**/conversations/
+**/config.json
+versions.json

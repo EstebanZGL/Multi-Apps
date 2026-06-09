@@ -1,0 +1,8 @@
+{
+    "id": "chat_perso",
+    "name": "Jarvis AI",
+    "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
+    "icon_text": "🤖",
+    "entry_point": "app",
+    "class_name": "JarvisAppWrapper"
+}

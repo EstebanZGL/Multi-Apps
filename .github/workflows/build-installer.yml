@@ -1,0 +1,50 @@
+name: Build Web-Installer
+
+on:
+  push:
+    tags:
+      - 'v*' # Se déclenche quand tu pousses un tag (ex: v1.0.0)
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install customtkinter requests pillow PyInstaller
+
+      - name: Build Installer EXE
+        run: |
+          pyinstaller --noconfirm --onedir --windowed --name="Multivers_Installer" --icon="assets/app_icon.ico" --add-data="assets;assets/" multivers_installer.py
+
+      - name: Zip Artifacts
+        run: |
+          powershell Compress-Archive -Path dist/Multivers_Installer/* -DestinationPath Multivers_Installer.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Multivers_Installer.zip
+          name: Multivers Suite Release ${{ github.ref_name }}
+          body: |
+            🚀 Nouvelle mise à jour du Multivers !
+            
+            Cette release contient le **Web-Installer** permettant d'installer :
+            - CERviable
+            - Jarvis Native
+            - Downloader Universel
+            
+            **Instructions :**
+            1. Téléchargez `Multivers_Installer.zip`.
+            2. Lancez `Multivers_Installer.exe`.
+            3. Sélectionnez vos applications.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
