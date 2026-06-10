@@ -207,7 +207,12 @@ class WebInstaller(ctk.CTk):
             self._log("Création des raccourcis...")
             self._create_shortcuts()
             
-            self.after(0, lambda: messagebox.showinfo("Succès", "Installation terminée avec succès !"))
+            self._log("Installation terminée !")
+            self.progress_bar.set(1)
+            
+            if messagebox.askyesno("Succès", "Installation terminée avec succès !\n\nVoulez-vous lancer le Multivers Launcher maintenant ?"):
+                os.startfile(exe_path)
+            
             self.after(0, self.destroy)
 
         except Exception as e:
