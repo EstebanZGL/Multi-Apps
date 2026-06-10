@@ -15,6 +15,9 @@ MANIFEST_FILE = os.path.join(DATA_DIR, "install_manifest.json")
 GLOBAL_EXCLUDE_FILES = [".env", "config.json", ".gitignore", "GEMINI.md"]
 GLOBAL_EXCLUDE_DIRS = ["__pycache__", ".git", ".pytest_cache", "conversations"]
 
+# Exclusions spécifiques pour le Core "Light" (pour respecter la limite GitHub de 100Mo)
+CORE_HEAVY_FILES = ["ffmpeg.exe", "ffplay.exe", "ffprobe.exe"]
+
 def get_file_hash(filepath):
     hash_func = hashlib.md5()
     with open(filepath, 'rb') as f:
@@ -22,7 +25,7 @@ def get_file_hash(filepath):
             hash_func.update(chunk)
     return hash_func.hexdigest()
 
-def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None):
+def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None, exclude_heavy=False):
     if exclude_files is None: exclude_files = []
     if exclude_dirs is None: exclude_dirs = []
     
@@ -33,6 +36,8 @@ def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None):
             
             for file in files:
                 if file in exclude_files or file.endswith('.pyc'):
+                    continue
+                if exclude_heavy and file in CORE_HEAVY_FILES:
                     continue
                 
                 full_path = os.path.join(root, file)
@@ -82,15 +87,24 @@ def prepare_packaging():
                 "hash": get_file_hash(zip_path)
             })
 
-    # 2. Packaging du Launcher Core
-    print("🏠 Préparation du Core...")
+    # 2. Packaging du Launcher Core (Version Light pour GitHub)
+    print("🏠 Préparation du Core (Version Light)...")
     core_src = os.path.join(SOURCE_DIR, "dist", "Launcher_Universel")
     if os.path.exists(core_src):
-        print("  - Compression du moteur principal...")
+        print("  - Compression du moteur principal (sans binaires lourds)...")
         core_zip_path = os.path.join(DATA_DIR, "core.zip")
-        zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS)
+        zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS, exclude_heavy=True)
         install_manifest["core_zip"] = "core.zip"
         install_manifest["core_hash"] = get_file_hash(core_zip_path)
+        
+        # Packager FFmpeg séparément s'il existe
+        bin_dir = os.path.join(SOURCE_DIR, "bin")
+        if os.path.exists(bin_dir):
+            print("  - Packaging des binaires FFmpeg séparément...")
+            ffmpeg_zip_path = os.path.join(DATA_DIR, "ffmpeg.zip")
+            zip_directory(bin_dir, ffmpeg_zip_path)
+            install_manifest["ffmpeg_zip"] = "ffmpeg.zip"
+            install_manifest["ffmpeg_hash"] = get_file_hash(ffmpeg_zip_path)
     else:
         print("  ⚠️ Attention : dist/Launcher_Universel introuvable. Lancez 'build.py' d'abord !")
 

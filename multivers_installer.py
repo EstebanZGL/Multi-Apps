@@ -139,13 +139,22 @@ class WebInstaller(ctk.CTk):
                 import webbrowser
                 webbrowser.open("https://ollama.com/download")
 
+    def _start_installation(self):
+        self.install_btn.configure(state="disabled")
+        threading.Thread(target=self._installation_task, daemon=True).start()
+
     def _installation_task(self):
         try:
             os.makedirs(INSTALL_DIR, exist_ok=True)
             apps_to_install = [app for app in self.manifest_data['apps'] if self.selected_apps[app['id']].get()]
             
-            # Step calculation: Core + Apps + Shortcut
-            total_steps = (1 if 'core_zip' in self.manifest_data else 0) + len(apps_to_install) + 1
+            # Step calculation: Core + Apps + FFmpeg (optional) + Shortcut
+            downloader_selected = any(app['id'] == 'downloader' for app in apps_to_install)
+            has_ffmpeg = 'ffmpeg_zip' in self.manifest_data
+            
+            total_steps = (1 if 'core_zip' in self.manifest_data else 0) + \
+                          len(apps_to_install) + \
+                          (1 if (downloader_selected and has_ffmpeg) else 0) + 1
             current_step = 0
 
             # 1. Install Core if necessary
@@ -153,13 +162,11 @@ class WebInstaller(ctk.CTk):
                 self._log("Téléchargement du moteur principal (Core)...")
                 core_zip_url = f"{BASE_URL}/{self.manifest_data['core_zip']}"
                 core_zip_path = os.path.join(INSTALL_DIR, "core.zip")
-                
                 self._download_file(core_zip_url, core_zip_path)
                 
                 self._log("Extraction du moteur principal...")
                 with zipfile.ZipFile(core_zip_path, 'r') as zip_ref:
                     zip_ref.extractall(INSTALL_DIR)
-                
                 os.remove(core_zip_path)
                 current_step += 1
                 self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
@@ -169,18 +176,31 @@ class WebInstaller(ctk.CTk):
                 self._log(f"Téléchargement de {app['name']}...")
                 zip_url = f"{BASE_URL}/{app['zip_file']}"
                 zip_path = os.path.join(INSTALL_DIR, f"{app['id']}.zip")
-                
                 self._download_file(zip_url, zip_path)
                 
                 self._log(f"Extraction de {app['name']}...")
                 app_dir = os.path.join(INSTALL_DIR, "apps", app['id'])
                 if os.path.exists(app_dir): shutil.rmtree(app_dir)
                 os.makedirs(app_dir, exist_ok=True)
-                
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(app_dir)
-                
                 os.remove(zip_path)
+                current_step += 1
+                self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
+
+            # 3. Install FFmpeg if needed
+            if downloader_selected and has_ffmpeg:
+                self._log("Téléchargement des outils multimédia (FFmpeg)...")
+                ff_url = f"{BASE_URL}/{self.manifest_data['ffmpeg_zip']}"
+                ff_zip_path = os.path.join(INSTALL_DIR, "ffmpeg.zip")
+                self._download_file(ff_url, ff_zip_path)
+                
+                self._log("Extraction de FFmpeg...")
+                bin_dir = os.path.join(INSTALL_DIR, "bin")
+                os.makedirs(bin_dir, exist_ok=True)
+                with zipfile.ZipFile(ff_zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(bin_dir)
+                os.remove(ff_zip_path)
                 current_step += 1
                 self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
 
