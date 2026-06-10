@@ -42,7 +42,7 @@ class AppWheel(ctk.CTkFrame):
         self.canvas.delete("all")
         w = self.canvas.winfo_width()
         h = self.canvas.winfo_height()
-        if w < 10 or h < 10: # Avoid drawing if too small
+        if w < 10 or h < 10: 
             self.after(100, self.draw)
             return
             
@@ -51,11 +51,22 @@ class AppWheel(ctk.CTkFrame):
         
         num_apps = len(self.apps)
         if num_apps == 0:
-            self.canvas.create_text(cx, cy, text="Aucune application trouvée", fill="white", font=("Arial", 16))
+            self.canvas.create_text(cx, cy, text="Aucune application installée", fill="white", font=("Arial", 16))
             return
 
-        # Use a more robust selection: the one closest to -pi/2 (TOP)
-        # Normalize current angle to 0..2pi
+        # Special Case: Only 1 app -> Center it
+        if num_apps == 1:
+            app = self.apps[0]
+            size = 100
+            tag = "app_0"
+            self.canvas.create_oval(cx-size+4, cy-size+4, cx+size+4, cy+size+4, fill="#000000", outline="", stipple="gray50")
+            self.canvas.create_oval(cx-size, cy-size, cx+size, cy+size, fill="#E07A5F", outline="#555568", width=3, tags=tag)
+            self.canvas.create_text(cx, cy-15, text=app.get("icon_text", "📦"), font=("Arial", 50), fill="white", tags=tag, state="disabled")
+            self.canvas.create_text(cx, cy+35, text=app["name"], font=("Arial", 14, "bold"), fill="white", tags=tag, state="disabled")
+            self.canvas.tag_bind(tag, "<Button-1>", lambda e: self.on_select(app))
+            return
+
+        # Regular Wheel logic for 2+ apps
         norm_angle = self.angle % (2 * math.pi)
 
         for i, app in enumerate(self.apps):

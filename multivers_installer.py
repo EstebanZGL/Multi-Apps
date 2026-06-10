@@ -181,19 +181,49 @@ class WebInstaller(ctk.CTk):
             self.main_cancel_requested.clear()
             os.makedirs(INSTALL_DIR, exist_ok=True)
             apps_to_dl = [a for a in self.manifest_data['apps'] if self.selected_apps[a['id']].get()]
+            downloader_selected = any(app['id'] == 'downloader' for app in apps_to_dl)
             
-            if 'core_zip' in self.manifest_data:
+            # Smart Core Install: Only if missing or update
+            launcher_exe = os.path.join(INSTALL_DIR, "Launcher_Universel.exe")
+            v_cloud = self.manifest_data.get('version', '1.0.0')
+            v_local = self.local_manifest.get('version', '0.0.0') if self.local_manifest else "0.0.0"
+            needs_core = not os.path.exists(launcher_exe) or (v_cloud != v_local)
+
+            total_tasks = (1 if needs_core else 0) + len(apps_to_dl) + (1 if downloader_selected else 0)
+            current_task = 0
+
+            # 1. Core
+            if needs_core and 'core_zip' in self.manifest_data:
+                self._update_main_ui("Moteur : Connexion...", current_task/total_tasks)
                 self._download_file(f"{BASE_URL}/{self.manifest_data['core_zip']}", os.path.join(INSTALL_DIR, "core.zip"), 
-                                        self.main_cancel_requested, lambda m, p: self.after(0, lambda: self._update_main_ui(f"Moteur : {m}", p*0.3)))
+                                        self.main_cancel_requested, lambda m, p: self.after(0, lambda: self._update_main_ui(f"Moteur : {m}", (current_task + p)/total_tasks)))
                 with zipfile.ZipFile(os.path.join(INSTALL_DIR, "core.zip"), 'r') as z: z.extractall(INSTALL_DIR)
                 os.remove(os.path.join(INSTALL_DIR, "core.zip"))
+                current_task += 1
 
+            # 2. Apps
             for a in apps_to_dl:
                 app_path = os.path.join(INSTALL_DIR, "apps", a['id'])
-                self._download_file(f"{BASE_URL}/{a['zip_file']}", os.path.join(INSTALL_DIR, "app.zip"), 
-                                        self.main_cancel_requested, lambda m, p, n=a['name']: self.after(0, lambda: self._update_main_ui(f"{n} : {m}", 0.3 + p*0.4)))
-                with zipfile.ZipFile(os.path.join(INSTALL_DIR, "app.zip"), 'r') as z: z.extractall(app_path)
-                os.remove(os.path.join(INSTALL_DIR, "app.zip"))
+                self._update_main_ui(f"{a['name']} : Connexion...", current_task/total_tasks)
+                temp_app_zip = os.path.join(INSTALL_DIR, "temp_app.zip")
+                self._download_file(f"{BASE_URL}/{a['zip_file']}", temp_app_zip, 
+                                        self.main_cancel_requested, lambda m, p, n=a['name']: self.after(0, lambda: self._update_main_ui(f"{n} : {m}", (current_task + p)/total_tasks)))
+                if os.path.exists(app_path): shutil.rmtree(app_path)
+                os.makedirs(app_path, exist_ok=True)
+                with zipfile.ZipFile(temp_app_zip, 'r') as z: z.extractall(app_path)
+                os.remove(temp_app_zip)
+                current_task += 1
+
+            # 3. FFmpeg
+            if downloader_selected and 'ffmpeg_zip' in self.manifest_data:
+                if not os.path.exists(os.path.join(INSTALL_DIR, "bin", "ffmpeg.exe")):
+                    self._update_main_ui("FFmpeg : Connexion...", current_task/total_tasks)
+                    ffmpeg_zip = os.path.join(INSTALL_DIR, "ffmpeg.zip")
+                    self._download_file(f"{BASE_URL}/{self.manifest_data['ffmpeg_zip']}", ffmpeg_zip, 
+                                            self.main_cancel_requested, lambda m, p: self.after(0, lambda: self._update_main_ui(f"FFmpeg : {m}", (current_task + p)/total_tasks)))
+                    with zipfile.ZipFile(ffmpeg_zip, 'r') as z: z.extractall(os.path.join(INSTALL_DIR, "bin"))
+                    os.remove(ffmpeg_zip)
+                current_task += 1
 
             self._create_shortcuts()
             with open(LOCAL_MANIFEST_FILE, 'w', encoding='utf-8') as f: json.dump(self.manifest_data, f, indent=4)
@@ -201,6 +231,7 @@ class WebInstaller(ctk.CTk):
             messagebox.showinfo("Succès", "Multivers est installé.")
         except Exception as e:
             self.after(0, lambda: self.status_label.configure(text=f"Erreur: {e}"))
+            if "Annulé" not in str(e): self.after(0, lambda: messagebox.showerror("Erreur", str(e)))
         finally:
             self.after(0, lambda: self.action_btn.configure(state="normal"))
             self.after(0, lambda: self.cancel_main_btn.configure(state="disabled"))
