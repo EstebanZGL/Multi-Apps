@@ -66,6 +66,10 @@ class LauncherMainView(ctk.CTk):
         """Reloads the app lists (local and remote) and refreshes the current view."""
         self.local_apps = get_local_apps()
         
+        if not self.local_apps and self.view_mode.get() == "wheel":
+            base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.getcwd()
+            messagebox.showinfo("Diagnostic", f"Aucune application installée trouvée.\n\nChemin scanné : {base}\\apps\n\nVérifiez que le dossier 'apps' existe à côté du Launcher.")
+
         if self.view_mode.get() == "carousel":
             # Hybrid mode: Start remote fetch in background
             threading.Thread(target=self._fetch_remote_apps, daemon=True).start()

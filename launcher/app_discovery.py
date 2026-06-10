@@ -11,33 +11,44 @@ def get_base_path():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_local_apps():
-    """Ultra-robust app discovery."""
+    """Ultra-robust app discovery with verbose logging."""
     base_path = get_base_path()
     cwd = os.getcwd()
     
-    # Check multiple potential locations for apps/
     potential_dirs = [
         os.path.join(base_path, "apps"),
-        os.path.join(cwd, "apps"),
-        "apps" # Relative to CWD
+        os.path.join(cwd, "apps")
     ]
+    
+    log_msg = f"Base Path: {base_path}\nCWD: {cwd}\n"
     
     apps_dir = None
     for d in potential_dirs:
+        log_msg += f"Scanning: {d} ... "
         if os.path.exists(d) and os.path.isdir(d):
             apps_dir = d
+            log_msg += "FOUND\n"
             break
+        else:
+            log_msg += "NOT FOUND\n"
             
     if not apps_dir:
+        # Don't show messagebox here to not spam, but keep log
+        print(log_msg)
         return []
 
-    # Add to sys.path for dynamic imports
+    # Ensure apps_dir is a package
+    init_file = os.path.join(apps_dir, "__init__.py")
+    if not os.path.exists(init_file):
+        with open(init_file, 'w') as f: f.write("")
+
     if apps_dir not in sys.path:
         sys.path.insert(0, apps_dir)
 
     apps = []
     try:
-        for folder in os.listdir(apps_dir):
+        folders = os.listdir(apps_dir)
+        for folder in folders:
             if folder.startswith(('.', '__')): continue
             app_folder = os.path.join(apps_dir, folder)
             if not os.path.isdir(app_folder): continue
@@ -50,8 +61,10 @@ def get_local_apps():
                         manifest['folder'] = folder
                         manifest['is_installed'] = True
                         apps.append(manifest)
-                except: continue
-    except: pass
+                except Exception as e:
+                    print(f"Error loading manifest in {folder}: {e}")
+    except Exception as e:
+        print(f"Error listing apps_dir: {e}")
     
     return apps
 
