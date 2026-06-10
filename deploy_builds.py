@@ -49,7 +49,7 @@ def deploy():
     print("📤 Envoi vers GitHub...")
     run_git(["add", "data"])
     run_git(["commit", "-m", "🚀 Mise à jour automatique des builds d'applications"])
-    run_git(["push", "origin", "builds"])
+    run_git(["push", "origin", "builds", "--force"])
 
     # 6. Retourner sur la branche d'origine
     print(f"🔄 Retour sur la branche '{current_branch}'...")
