@@ -31,12 +31,25 @@ def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None, excl
     
     with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(src_dir):
-            # Filtrage des dossiers
-            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+            # Calcul du chemin relatif par rapport à la racine source
+            rel_root = os.path.relpath(root, src_dir)
+            path_parts = rel_root.split(os.sep)
+
+            # 1. Exclusion des dossiers (basée sur le nom ou le chemin)
+            # On vérifie si l'un des dossiers parents ou le dossier actuel est à exclure
+            should_skip_dir = False
+            for d_to_exclude in exclude_dirs:
+                if d_to_exclude in path_parts:
+                    should_skip_dir = True
+                    break
             
+            if should_skip_dir:
+                continue
+
             for file in files:
                 if file in exclude_files or file.endswith('.pyc'):
                     continue
+                
                 if exclude_heavy and file in CORE_HEAVY_FILES:
                     continue
                 
