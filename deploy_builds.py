@@ -31,7 +31,19 @@ def deploy():
     if os.path.exists(target_data_dir):
         shutil.rmtree(target_data_dir)
     
-    shutil.copytree(build_data_dir, target_data_dir)
+    # Copie sélective : on ignore les fichiers > 100 Mo pour Git
+    os.makedirs(target_data_dir, exist_ok=True)
+    for root, dirs, files in os.walk(build_data_dir):
+        rel_root = os.path.relpath(root, build_data_dir)
+        dest_root = os.path.join(target_data_dir, rel_root)
+        os.makedirs(dest_root, exist_ok=True)
+        
+        for f in files:
+            src_file = os.path.join(root, f)
+            if os.path.getsize(src_file) < 100 * 1024 * 1024: # 100 Mo
+                shutil.copy2(src_file, os.path.join(dest_root, f))
+            else:
+                print(f"  ⚠️ Ignoré (trop lourd pour Git) : {f}")
 
     # 5. Commit et Push
     print("📤 Envoi vers GitHub...")
