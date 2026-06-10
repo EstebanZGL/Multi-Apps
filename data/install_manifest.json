@@ -1,0 +1,34 @@
+{
+    "version": "1.0.0",
+    "apps": [
+        {
+            "id": "CERviable",
+            "name": "CERviable",
+            "description": "Automatisez vos rapports CER à partir de documents Prosit.",
+            "icon_text": "📄",
+            "zip_file": "apps/CERviable.zip",
+            "hash": "f0a2348a5eab282dd5a027614463c037"
+        },
+        {
+            "id": "ChatPerso",
+            "name": "Jarvis AI",
+            "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
+            "icon_text": "🤖",
+            "zip_file": "apps/ChatPerso.zip",
+            "hash": "cf81442726f5f1c789be9ff31fb39e5c"
+        },
+        {
+            "id": "downloader",
+            "name": "Downloader Universel",
+            "description": "Téléchargez des vidéos et de la musique depuis YouTube, TikTok, Instagram, etc.",
+            "icon_text": "📥",
+            "zip_file": "apps/downloader.zip",
+            "hash": "cf1e14bb845c4f68c033c594ea01bb92"
+        }
+    ],
+    "core_files": [],
+    "core_zip": "core.zip",
+    "core_hash": "cf34471a536fada7ff92364fc22e4288",
+    "ffmpeg_zip": "ffmpeg.zip",
+    "ffmpeg_hash": "4fc5a42d93f7341f2aa5a8963c0300af"
+}
