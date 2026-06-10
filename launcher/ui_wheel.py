@@ -75,21 +75,34 @@ class AppWheel(ctk.CTkFrame):
             if diff > math.pi: diff = 2 * math.pi - diff
             
             is_selected = diff < (math.pi / num_apps)
+            is_installed = app.get("is_installed", True)
             
             size = 70 if is_selected else 50
-            color = "#E07A5F" if is_selected else "#3a3a50"
-            text_color = "white"
+            
+            # Color logic: Gray out if not installed
+            if not is_installed:
+                color = "#4a4a4a"
+                border_color = "#555555"
+                text_color = "#888888"
+            else:
+                color = "#E07A5F" if is_selected else "#3a3a50"
+                border_color = "#555568"
+                text_color = "white"
             
             # Draw circle shadow
             self.canvas.create_oval(x-size+4, y-size+4, x+size+4, y+size+4, fill="#000000", outline="", stipple="gray50")
             
             # Draw circle
             tag = f"app_{i}"
-            self.canvas.create_oval(x-size, y-size, x+size, y+size, fill=color, outline="#555568", width=2, tags=tag)
+            self.canvas.create_oval(x-size, y-size, x+size, y+size, fill=color, outline=border_color, width=2, tags=tag)
             
             # Draw icon text
             self.canvas.create_text(x, y-10, text=app.get("icon_text", "📦"), font=("Arial", 35), fill=text_color, tags=tag, state="disabled")
-            self.canvas.create_text(x, y+25, text=app["name"], font=("Arial", 12, "bold" if is_selected else "normal"), fill=text_color, tags=tag, state="disabled")
+            
+            app_name = app["name"]
+            if not is_installed: app_name += "\n(Non installé)"
+            
+            self.canvas.create_text(x, y+25, text=app_name, font=("Arial", 10, "bold" if is_selected else "normal"), fill=text_color, tags=tag, state="disabled", justify="center")
             
             self.canvas.tag_bind(tag, "<Button-1>", lambda e, a=app: self.on_select(a))
             self.canvas.tag_bind(tag, "<Enter>", lambda e, t=tag: self.canvas.itemconfig(t, outline="white"))

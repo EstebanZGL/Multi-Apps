@@ -77,27 +77,19 @@ class LauncherMainView(ctk.CTk):
         menu.pack(fill="both", expand=True)
 
     def launch_app(self, app_manifest):
-        print(f"Lancement de {app_manifest['name']}...")
+        is_installed = app_manifest.get("is_installed", True)
         
-        try:
-            # Lazy Loading
-            app_class = load_app_module(app_manifest)
-            
-            if app_class:
-                # Hide switcher
-                self.switcher_btn.pack_forget()
-                
-                # Clear container
-                for child in self.container.winfo_children():
-                    child.destroy()
-                
-                # Instance app as Frame
-                self.current_app_frame = app_class(self.container, self)
-                self.current_app_frame.pack(fill="both", expand=True)
-            else:
-                messagebox.showerror("Erreur de lancement", f"Impossible de charger le module pour '{app_manifest['name']}'.")
-        except Exception as e:
-            err_msg = traceback.format_exc()
-            print(f"Erreur lors du lancement de l'app:\n{err_msg}")
-            messagebox.showerror("Erreur Critique", f"L'application '{app_manifest['name']}' a rencontré une erreur fatale au lancement :\n\n{str(e)}\n\nConsultez la console pour plus de détails.")
-            self.show_menu()
+        if not is_installed:
+            if messagebox.askyesno("Application non installée", 
+                                  f"L'application '{app_manifest['name']}' n'est pas installée sur ce PC.\n\nVoulez-vous lancer l'assistant d'installation ?"):
+                try:
+                    # Look for installer in the same dir as the launcher
+                    if os.path.exists("multivers_installer.py"):
+                        import subprocess
+                        subprocess.Popen([sys.executable, "multivers_installer.py"])
+                    else:
+                        messagebox.showinfo("Info", "Veuillez télécharger et lancer le 'Multivers_Installer.exe' pour ajouter ce module.")
+                except: pass
+            return
+
+        print(f"Lancement de {app_manifest['name']}...")

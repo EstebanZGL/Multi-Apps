@@ -14,15 +14,26 @@ class AppCarousel(ctk.CTkFrame):
 
     def _build_carousel(self):
         for app in self.apps:
-            card = ctk.CTkFrame(self.scroll_frame, width=200, height=250, fg_color="#3a3a50", corner_radius=15)
+            is_installed = app.get("is_installed", True)
+            bg_color = "#3a3a50" if is_installed else "#2a2a35"
+            
+            card = ctk.CTkFrame(self.scroll_frame, width=200, height=250, fg_color=bg_color, corner_radius=15)
             card.pack(side="left", padx=15, pady=10)
             card.pack_propagate(False)
             
-            ctk.CTkLabel(card, text=app.get("icon_text", "📦"), font=("Arial", 60)).pack(pady=(30, 10))
-            ctk.CTkLabel(card, text=app["name"], font=("Arial", 18, "bold")).pack(pady=5)
-            ctk.CTkLabel(card, text=app.get("description", ""), font=("Arial", 11), wraplength=180, text_color="#aaa").pack(pady=5, padx=10)
+            # Icon and labels with dimmed colors if not installed
+            text_color = "white" if is_installed else "#777777"
+            sub_text_color = "#aaa" if is_installed else "#555555"
+
+            ctk.CTkLabel(card, text=app.get("icon_text", "📦"), font=("Arial", 60), text_color=text_color).pack(pady=(30, 10))
+            ctk.CTkLabel(card, text=app["name"], font=("Arial", 18, "bold"), text_color=text_color).pack(pady=5)
+            ctk.CTkLabel(card, text=app.get("description", ""), font=("Arial", 11), wraplength=180, text_color=sub_text_color).pack(pady=5, padx=10)
             
-            btn = ctk.CTkButton(card, text="Lancer", fg_color="#E07A5F", hover_color="#D16043", 
+            btn_text = "Lancer" if is_installed else "Installer"
+            btn_color = "#E07A5F" if is_installed else "#555568"
+            btn_hover = "#D16043" if is_installed else "#444455"
+
+            btn = ctk.CTkButton(card, text=btn_text, fg_color=btn_color, hover_color=btn_hover, 
                                 command=lambda a=app: self.on_select(a))
             btn.pack(side="bottom", pady=20)
             

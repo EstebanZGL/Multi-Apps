@@ -5,9 +5,11 @@ import requests
 import zipfile
 import shutil
 import threading
+import subprocess
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
+import webbrowser
 
 # --- Configuration ---
 GITHUB_USER = "EstebanZGL"
@@ -16,43 +18,63 @@ GITHUB_BRANCH = "builds"
 BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/data"
 MANIFEST_URL = f"{BASE_URL}/install_manifest.json"
 
+# HackGPT Nextcloud Link (Direct ZIP download if possible)
+HACKGPT_LINK = "https://nxt.xavest-truenas.fr/s/xi7pwXsgiD3gM4F/download"
+
 APP_NAME = "MultiversLauncher"
 INSTALL_DIR = os.path.join(os.getenv('APPDATA'), APP_NAME)
-LOCAL_VERSION_FILE = os.path.join(INSTALL_DIR, "versions.json")
+LOCAL_MANIFEST_FILE = os.path.join(INSTALL_DIR, "install_manifest.json")
 
 class WebInstaller(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Multivers - Web Installer")
-        self.geometry("600x500")
+        self.title("Multivers - Assistant d'Installation")
+        self.geometry("700x600")
         ctk.set_appearance_mode("dark")
 
         self.manifest_data = None
+        self.local_manifest = self._load_local_manifest()
         self.selected_apps = {}
-        self.install_progress = {}
+        self.installation_mode = "install" # install, update, uninstall
 
         self._build_ui()
         self._load_remote_manifest()
 
+    def _load_local_manifest(self):
+        if os.path.exists(LOCAL_MANIFEST_FILE):
+            try:
+                with open(LOCAL_MANIFEST_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except: pass
+        return None
+
     def _build_ui(self):
         # Header
         self.header = ctk.CTkLabel(
-            self, text="🚀 Multivers - Assistant d'Installation", 
-            font=ctk.CTkFont(size=26, weight="bold"),
+            self, text="🚀 Multivers Suite", 
+            font=ctk.CTkFont(size=28, weight="bold"),
             text_color="#00BFFF"
         )
-        self.header.pack(pady=(30, 10))
+        self.header.pack(pady=(30, 5))
 
-        self.status_label = ctk.CTkLabel(
-            self, text="Connexion aux serveurs GitHub...", 
-            font=ctk.CTkFont(slant="italic", size=14)
-        )
-        self.status_label.pack(pady=(0, 15))
+        self.version_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(slant="italic"))
+        self.version_label.pack(pady=(0, 10))
+
+        # Mode Selection (if already installed)
+        self.mode_frame = ctk.CTkFrame(self, fg_color="transparent")
+        if self.local_manifest:
+            self.mode_frame.pack(fill="x", padx=30, pady=5)
+            self.install_radio = ctk.CTkRadioButton(self.mode_frame, text="Mettre à jour / Réinstaller", variable=tk.StringVar(value="install"), value="install", command=lambda: self._set_mode("install"))
+            self.install_radio.pack(side="left", padx=20)
+            self.install_radio.select()
+            
+            self.uninstall_radio = ctk.CTkRadioButton(self.mode_frame, text="Désinstaller tout", variable=tk.StringVar(value="install"), value="uninstall", command=lambda: self._set_mode("uninstall"))
+            self.uninstall_radio.pack(side="left", padx=20)
 
         # Scrollable area for apps
         self.apps_frame = ctk.CTkScrollableFrame(
-            self, label_text="Sélectionnez les modules à installer",
+            self, label_text="Composants disponibles",
             label_font=ctk.CTkFont(weight="bold", size=16),
             border_width=2, border_color="#333333"
         )
@@ -61,31 +83,38 @@ class WebInstaller(ctk.CTk):
         # Progress bar
         self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.progress_frame.pack(fill="x", padx=30, pady=(10, 0))
-        
         self.progress_bar = ctk.CTkProgressBar(self.progress_frame, progress_color="#00BFFF")
         self.progress_bar.pack(fill="x")
         self.progress_bar.set(0)
+
+        self.status_label = ctk.CTkLabel(self, text="Chargement...", font=ctk.CTkFont(size=12))
+        self.status_label.pack(pady=5)
 
         # Footer Buttons
         self.footer = ctk.CTkFrame(self, fg_color="transparent")
         self.footer.pack(fill="x", padx=30, pady=20)
 
-        self.install_btn = ctk.CTkButton(
+        self.action_btn = ctk.CTkButton(
             self.footer, text="Démarrer l'installation", 
-            state="disabled", command=self._start_installation,
+            state="disabled", command=self._handle_action,
             font=ctk.CTkFont(weight="bold", size=15),
-            fg_color="#28a745", hover_color="#218838",
-            height=40
+            fg_color="#28a745", hover_color="#218838", height=45
         )
-        self.install_btn.pack(side="right")
+        self.action_btn.pack(side="right", padx=5)
 
-        self.ollama_btn = ctk.CTkButton(
-            self.footer, text="🔍 Diagnostiquer Ollama", 
-            fg_color="#555568", hover_color="#444455",
-            command=self._check_ollama,
-            height=40
+        self.ai_btn = ctk.CTkButton(
+            self.footer, text="🧠 Gérer HackGPT", 
+            fg_color="#6f42c1", hover_color="#59359a",
+            command=self._manage_ai, height=45
         )
-        self.ollama_btn.pack(side="left")
+        self.ai_btn.pack(side="left", padx=5)
+
+    def _set_mode(self, mode):
+        self.installation_mode = mode
+        if mode == "uninstall":
+            self.action_btn.configure(text="Désinstaller Multivers", fg_color="#dc3545", hover_color="#a71d2a")
+        else:
+            self.action_btn.configure(text="Démarrer l'installation", fg_color="#28a745", hover_color="#218838")
 
     def _load_remote_manifest(self):
         def task():
@@ -95,171 +124,158 @@ class WebInstaller(ctk.CTk):
                 self.manifest_data = response.json()
                 self.after(0, self._populate_apps)
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Erreur", f"Impossible de charger le manifest : {e}"))
-        
+                self.after(0, lambda: messagebox.showerror("Erreur", f"Erreur de connexion : {e}"))
         threading.Thread(target=task, daemon=True).start()
 
     def _populate_apps(self):
-        self.status_label.configure(text=f"Version du catalogue : {self.manifest_data.get('version', '1.0.0')}")
+        v_remote = self.manifest_data.get('version', '1.0.0')
+        v_local = self.local_manifest.get('version', 'Aucune') if self.local_manifest else "Aucune"
+        self.version_label.configure(text=f"Version Cloud : v{v_remote} | Installée : {v_local}")
         
         for app in self.manifest_data.get("apps", []):
             var = tk.BooleanVar(value=True)
             self.selected_apps[app['id']] = var
             
-            # Application Card
-            app_card = ctk.CTkFrame(self.apps_frame, fg_color="#2b2b2b", corner_radius=8)
-            app_card.pack(fill="x", pady=5, padx=5)
+            card = ctk.CTkFrame(self.apps_frame, fg_color="#2b2b2b", corner_radius=8)
+            card.pack(fill="x", pady=5, padx=5)
             
-            cb = ctk.CTkCheckBox(
-                app_card, 
-                text=f"{app['icon_text']} {app['name']}", 
-                font=ctk.CTkFont(weight="bold", size=15),
-                variable=var,
-                fg_color="#00BFFF"
-            )
+            cb = ctk.CTkCheckBox(card, text=f"{app['icon_text']} {app['name']}", variable=var, font=ctk.CTkFont(weight="bold"))
             cb.pack(anchor="w", padx=15, pady=(10, 0))
             
-            desc = ctk.CTkLabel(
-                app_card, text=app['description'], 
-                font=ctk.CTkFont(size=12), text_color="#aaaaaa",
-                justify="left", wraplength=450
-            )
+            desc = ctk.CTkLabel(card, text=app['description'], font=ctk.CTkFont(size=11), text_color="#aaaaaa", justify="left")
             desc.pack(anchor="w", padx=45, pady=(0, 10))
 
-        self.install_btn.configure(state="normal")
+        self.action_btn.configure(state="normal")
+        self.status_label.configure(text="Prêt.")
 
-    def _check_ollama(self):
-        import subprocess
-        try:
-            # Try to run ollama --version
-            result = subprocess.run(["ollama", "--version"], capture_output=True, text=True, check=True)
-            messagebox.showinfo("Ollama", f"Ollama est installé !\nVersion : {result.stdout.strip()}")
-        except:
-            if messagebox.askyesno("Ollama", "Ollama n'a pas été détecté. Souhaitez-vous ouvrir la page de téléchargement ?"):
-                import webbrowser
-                webbrowser.open("https://ollama.com/download")
-
-    def _start_installation(self):
-        self.install_btn.configure(state="disabled")
-        threading.Thread(target=self._installation_task, daemon=True).start()
+    def _handle_action(self):
+        if self.installation_mode == "uninstall":
+            if messagebox.askyesno("Confirmation", "Voulez-vous vraiment supprimer Multivers et toutes ses applications ?"):
+                threading.Thread(target=self._uninstall_task, daemon=True).start()
+        else:
+            threading.Thread(target=self._installation_task, daemon=True).start()
 
     def _installation_task(self):
         try:
+            self.action_btn.configure(state="disabled")
             os.makedirs(INSTALL_DIR, exist_ok=True)
+            
             apps_to_install = [app for app in self.manifest_data['apps'] if self.selected_apps[app['id']].get()]
-            
-            # Step calculation: Core + Apps + FFmpeg (optional) + Shortcut
             downloader_selected = any(app['id'] == 'downloader' for app in apps_to_install)
-            has_ffmpeg = 'ffmpeg_zip' in self.manifest_data
             
-            total_steps = (1 if 'core_zip' in self.manifest_data else 0) + \
-                          len(apps_to_install) + \
-                          (1 if (downloader_selected and has_ffmpeg) else 0) + 1
-            current_step = 0
+            total = (1 if 'core_zip' in self.manifest_data else 0) + len(apps_to_install) + (1 if downloader_selected else 0) + 1
+            current = 0
 
-            # 1. Install Core if necessary
+            # 1. Core
             if 'core_zip' in self.manifest_data:
-                self._log("Téléchargement du moteur principal (Core)...")
-                core_zip_url = f"{BASE_URL}/{self.manifest_data['core_zip']}"
-                core_zip_path = os.path.join(INSTALL_DIR, "core.zip")
-                self._download_file(core_zip_url, core_zip_path)
-                
-                self._log("Extraction du moteur principal...")
-                with zipfile.ZipFile(core_zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(INSTALL_DIR)
-                os.remove(core_zip_path)
-                current_step += 1
-                self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
+                self._update_status("Installation du moteur principal...", current/total)
+                self._download_and_extract(f"{BASE_URL}/{self.manifest_data['core_zip']}", INSTALL_DIR)
+                current += 1
 
-            # 2. Install Apps
+            # 2. Apps
             for app in apps_to_install:
-                self._log(f"Téléchargement de {app['name']}...")
-                zip_url = f"{BASE_URL}/{app['zip_file']}"
-                zip_path = os.path.join(INSTALL_DIR, f"{app['id']}.zip")
-                self._download_file(zip_url, zip_path)
-                
-                self._log(f"Extraction de {app['name']}...")
-                app_dir = os.path.join(INSTALL_DIR, "apps", app['id'])
-                if os.path.exists(app_dir): shutil.rmtree(app_dir)
-                os.makedirs(app_dir, exist_ok=True)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(app_dir)
-                os.remove(zip_path)
-                current_step += 1
-                self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
+                self._update_status(f"Module : {app['name']}...", current/total)
+                app_path = os.path.join(INSTALL_DIR, "apps", app['id'])
+                self._download_and_extract(f"{BASE_URL}/{app['zip_file']}", app_path)
+                current += 1
 
-            # 3. Install FFmpeg if needed
-            if downloader_selected and has_ffmpeg:
-                self._log("Téléchargement des outils multimédia (FFmpeg)...")
-                ff_url = f"{BASE_URL}/{self.manifest_data['ffmpeg_zip']}"
-                ff_zip_path = os.path.join(INSTALL_DIR, "ffmpeg.zip")
-                self._download_file(ff_url, ff_zip_path)
-                
-                self._log("Extraction de FFmpeg...")
-                bin_dir = os.path.join(INSTALL_DIR, "bin")
-                os.makedirs(bin_dir, exist_ok=True)
-                with zipfile.ZipFile(ff_zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(bin_dir)
-                os.remove(ff_zip_path)
-                current_step += 1
-                self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
+            # 3. FFmpeg
+            if downloader_selected and 'ffmpeg_zip' in self.manifest_data:
+                self._update_status("Outils Multimédia (FFmpeg)...", current/total)
+                self._download_and_extract(f"{BASE_URL}/{self.manifest_data['ffmpeg_zip']}", os.path.join(INSTALL_DIR, "bin"))
+                current += 1
 
-            self._log("Création des raccourcis...")
+            # 4. Finalize
+            self._update_status("Raccourcis Windows...", current/total)
             self._create_shortcuts()
             
-            self._log("Installation terminée !")
-            self.progress_bar.set(1)
-            
-            if messagebox.askyesno("Succès", "Installation terminée avec succès !\n\nVoulez-vous lancer le Multivers Launcher maintenant ?"):
-                os.startfile(exe_path)
-            
+            # Save manifest locally
+            with open(LOCAL_MANIFEST_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.manifest_data, f, indent=4)
+
+            self.after(0, lambda: messagebox.showinfo("Succès", "Multivers est prêt !"))
             self.after(0, self.destroy)
-
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Erreur d'installation", str(e)))
-            self.after(0, lambda: self.install_btn.configure(state="normal"))
+            self.after(0, lambda: messagebox.showerror("Erreur", str(e)))
+        finally:
+            self.after(0, lambda: self.action_btn.configure(state="normal"))
 
-    def _download_file(self, url, dest_path):
+    def _uninstall_task(self):
+        try:
+            self.action_btn.configure(state="disabled")
+            self._update_status("Suppression des fichiers...", 0.5)
+            if os.path.exists(INSTALL_DIR):
+                shutil.rmtree(INSTALL_DIR)
+            # Remove shortcuts
+            for path in [os.path.join(os.environ["USERPROFILE"], "Desktop", "Multivers Launcher.lnk"),
+                        os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Multivers Launcher.lnk")]:
+                if os.path.exists(path): os.remove(path)
+            
+            self.after(0, lambda: messagebox.showinfo("Désinstallé", "Multivers a été retiré de votre ordinateur."))
+            self.after(0, self.destroy)
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror("Erreur", str(e)))
+        finally:
+            self.after(0, lambda: self.action_btn.configure(state="normal"))
+
+    def _manage_ai(self):
+        # AI Management Window
+        ai_win = ctk.CTkToplevel(self)
+        ai_win.title("Gestionnaire IA - HackGPT")
+        ai_win.geometry("500x400")
+        ai_win.attributes("-topmost", True)
+
+        ctk.CTkLabel(ai_win, text="Assistant IA HackGPT", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
+        
+        # Check Ollama
+        try:
+            res = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
+            status = f"Ollama détecté : {res.stdout.strip()}"
+            color = "#28a745"
+        except:
+            status = "Ollama n'est pas installé sur ce PC."
+            color = "#dc3545"
+        
+        ctk.CTkLabel(ai_win, text=status, text_color=color).pack(pady=10)
+
+        ctk.CTkButton(ai_win, text="Télécharger Ollama", command=lambda: webbrowser.open("https://ollama.com")).pack(pady=5)
+        
+        ctk.CTkLabel(ai_win, text="HackGPT est un modèle optimisé pour la cybersécurité.", font=ctk.CTkFont(size=12), wraplength=400).pack(pady=20)
+        
+        dl_btn = ctk.CTkButton(ai_win, text="🚀 Télécharger HackGPT (5 Go)", fg_color="#6f42c1", 
+                               command=lambda: self._download_hackgpt())
+        dl_btn.pack(pady=10)
+
+    def _download_hackgpt(self):
+        if messagebox.askyesno("Téléchargement", "Le modèle HackGPT pèse environ 5 Go. Voulez-vous lancer le téléchargement dans votre navigateur ?"):
+            webbrowser.open(HACKGPT_LINK)
+            messagebox.showinfo("Info", "Une fois le fichier téléchargé, placez-le dans votre dossier Ollama ou utilisez 'ollama create' avec le Modelfile fourni.")
+
+    def _download_and_extract(self, url, dest_dir):
+        os.makedirs(dest_dir, exist_ok=True)
+        temp_zip = os.path.join(dest_dir, "temp.zip")
         r = requests.get(url, stream=True)
         r.raise_for_status()
-        with open(dest_path, 'wb') as f:
+        with open(temp_zip, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
+        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+            zip_ref.extractall(dest_dir)
+        os.remove(temp_zip)
 
-    def _log(self, msg):
+    def _update_status(self, msg, progress):
         self.after(0, lambda: self.status_label.configure(text=msg))
+        self.after(0, lambda: self.progress_bar.set(progress))
 
     def _create_shortcuts(self):
-        import subprocess
         exe_path = os.path.join(INSTALL_DIR, "Launcher_Universel.exe")
-        if not os.path.exists(exe_path):
-            return
-
-        # Desktop Shortcut
-        desktop = os.path.join(os.environ["USERPROFILE"], "Desktop")
-        shortcut_path = os.path.join(desktop, "Multivers Launcher.lnk")
+        if not os.path.exists(exe_path): return
+        desktop = os.path.join(os.environ["USERPROFILE"], "Desktop", "Multivers Launcher.lnk")
+        start = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Multivers Launcher.lnk")
         
-        # Start Menu Shortcut
-        start_menu = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs")
-        start_shortcut = os.path.join(start_menu, "Multivers Launcher.lnk")
-
-        powershell_cmd = f"""
-        $WshShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
-        $Shortcut.TargetPath = '{exe_path}'
-        $Shortcut.WorkingDirectory = '{INSTALL_DIR}'
-        $Shortcut.IconLocation = '{exe_path},0'
-        $Shortcut.Save()
-        
-        $ShortcutStart = $WshShell.CreateShortcut('{start_shortcut}')
-        $ShortcutStart.TargetPath = '{exe_path}'
-        $ShortcutStart.WorkingDirectory = '{INSTALL_DIR}'
-        $ShortcutStart.IconLocation = '{exe_path},0'
-        $ShortcutStart.Save()
-        """
-        
-        subprocess.run(["powershell", "-Command", powershell_cmd], capture_output=True)
+        cmd = f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{desktop}');$s.TargetPath='{exe_path}';$s.WorkingDirectory='{INSTALL_DIR}';$s.Save();"
+        cmd += f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{start}');$s.TargetPath='{exe_path}';$s.WorkingDirectory='{INSTALL_DIR}';$s.Save();"
+        subprocess.run(["powershell", "-Command", cmd], capture_output=True)
 
 if __name__ == "__main__":
-    app = WebInstaller()
-    app.mainloop()
+    WebInstaller().mainloop()
