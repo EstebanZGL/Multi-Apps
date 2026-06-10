@@ -48,8 +48,12 @@ def deploy():
     # 5. Commit et Push
     print("📤 Envoi vers GitHub...")
     run_git(["add", "data"])
-    run_git(["commit", "-m", "🚀 Mise à jour automatique des builds d'applications"])
-    run_git(["push", "origin", "builds", "--force"])
+    status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+    if status:
+        run_git(["commit", "-m", "🚀 Mise à jour automatique des builds d'applications"])
+        run_git(["push", "origin", "builds", "--force"])
+    else:
+        print("  ℹ️ Aucun changement à déployer.")
 
     # 6. Retourner sur la branche d'origine
     print(f"🔄 Retour sur la branche '{current_branch}'...")
