@@ -1,0 +1,8 @@
+{
+    "id": "MIDIa",
+    "name": "MIDIa",
+    "description": "Transformez vos enregistrements audio de piano en fichiers MIDI grâce au Deep Learning.",
+    "icon_text": "🎹",
+    "entry_point": "app",
+    "class_name": "MIDIaApp"
+}

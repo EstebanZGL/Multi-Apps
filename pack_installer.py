@@ -91,9 +91,10 @@ def prepare_packaging():
     print("🏠 Préparation du Core (Version Light)...")
     core_src = os.path.join(SOURCE_DIR, "dist", "Launcher_Universel")
     if os.path.exists(core_src):
-        print("  - Compression du moteur principal (sans binaires lourds)...")
+        print("  - Compression du moteur principal (sans binaires lourds ni apps)...")
         core_zip_path = os.path.join(DATA_DIR, "core.zip")
-        zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS, exclude_heavy=True)
+        # On ajoute 'apps' aux dossiers à exclure spécifiquement pour le core
+        zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS + ["apps"], exclude_heavy=True)
         install_manifest["core_zip"] = "core.zip"
         install_manifest["core_hash"] = get_file_hash(core_zip_path)
         

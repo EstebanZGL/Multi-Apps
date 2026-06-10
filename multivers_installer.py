@@ -177,6 +177,7 @@ class WebInstaller(ctk.CTk):
     def _installation_task(self):
         try:
             self.action_btn.configure(state="disabled")
+            self.cancel_main_btn.configure(state="normal")
             self.main_cancel_requested.clear()
             os.makedirs(INSTALL_DIR, exist_ok=True)
             apps_to_dl = [a for a in self.manifest_data['apps'] if self.selected_apps[a['id']].get()]
@@ -188,9 +189,10 @@ class WebInstaller(ctk.CTk):
                 os.remove(os.path.join(INSTALL_DIR, "core.zip"))
 
             for a in apps_to_dl:
+                app_path = os.path.join(INSTALL_DIR, "apps", a['id'])
                 self._download_file(f"{BASE_URL}/{a['zip_file']}", os.path.join(INSTALL_DIR, "app.zip"), 
                                         self.main_cancel_requested, lambda m, p, n=a['name']: self.after(0, lambda: self._update_main_ui(f"{n} : {m}", 0.3 + p*0.4)))
-                with zipfile.ZipFile(os.path.join(INSTALL_DIR, "app.zip"), 'r') as z: z.extractall(os.path.join(INSTALL_DIR, "apps", a['id']))
+                with zipfile.ZipFile(os.path.join(INSTALL_DIR, "app.zip"), 'r') as z: z.extractall(app_path)
                 os.remove(os.path.join(INSTALL_DIR, "app.zip"))
 
             self._create_shortcuts()
@@ -201,6 +203,7 @@ class WebInstaller(ctk.CTk):
             self.after(0, lambda: self.status_label.configure(text=f"Erreur: {e}"))
         finally:
             self.after(0, lambda: self.action_btn.configure(state="normal"))
+            self.after(0, lambda: self.cancel_main_btn.configure(state="disabled"))
 
     def _update_main_ui(self, m, p):
         self.status_label.configure(text=m)
@@ -217,15 +220,19 @@ class WebInstaller(ctk.CTk):
         except Exception as e: messagebox.showerror("Erreur", str(e))
 
     def _manage_ai(self):
+        if self.ai_win and self.ai_win.winfo_exists():
+            self.ai_win.lift()
+            return
+
         self.ai_win = ctk.CTkToplevel(self)
         self.ai_win.title("Gestionnaire HackGPT")
         self.ai_win.geometry("550x600")
-        self.ai_win.transient(self) # Keep above installer but not topmost
+        self.ai_win.transient(self) 
 
         ctk.CTkLabel(self.ai_win, text="Assistant IA HackGPT", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=20)
         
         temp_path = os.path.join(os.getenv('TEMP'), "HackGPT_Install")
-        t_link = ctk.CTkLabel(self.ai_win, text=f"Dossier temporaire :\n{temp_path}", font=ctk.CTkFont(size=10, underline=True), text_color="#00BFFF", cursor="hand2")
+        t_link = ctk.CTkLabel(self.ai_win, text=f"Dossier temporaire (cliquable) :\n{temp_path}", font=ctk.CTkFont(size=10, underline=True), text_color="#00BFFF", cursor="hand2")
         t_link.pack(pady=5)
         t_link.bind("<Button-1>", lambda e: os.startfile(temp_path) if os.path.exists(temp_path) else None)
 
@@ -302,7 +309,7 @@ class WebInstaller(ctk.CTk):
             subprocess.run(["ollama", "create", "HackGPT", "-f", os.path.join(work_dir, "Modelfile")], shell=True, check=True)
             self.ai_status_msg = "Installé !"
             self.ai_progress_val = 1.0
-            messagebox.showinfo("IA", "HackGPT est prêt.")
+            self.after(0, lambda: messagebox.showinfo("IA", "HackGPT est prêt."))
         except Exception as e: self.ai_status_msg = f"Erreur: {e}"
         finally:
             if os.path.exists(temp_dir): shutil.rmtree(temp_dir, ignore_errors=True)
