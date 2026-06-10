@@ -14,7 +14,7 @@ class LauncherMainView(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Launcher Universel")
+        self.title("Launcher Universel [TEST VERSION ACTIVE]")
         self.geometry("1000x700")
         self.configure(fg_color="#1a1a1a")
         
