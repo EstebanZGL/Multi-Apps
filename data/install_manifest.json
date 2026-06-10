@@ -7,7 +7,7 @@
             "description": "Automatisez vos rapports CER à partir de documents Prosit.",
             "icon_text": "📄",
             "zip_file": "apps/CERviable.zip",
-            "hash": "5c9490da690b8da304c99fb0271c7c20"
+            "hash": "17a4b73fd79fe10653e7ddfe88b701b4"
         },
         {
             "id": "ChatPerso",
@@ -15,7 +15,7 @@
             "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
             "icon_text": "🤖",
             "zip_file": "apps/ChatPerso.zip",
-            "hash": "09ee18bb006aeb725d2c84906f5e4ca6"
+            "hash": "5d0e16289f3024c377c0ec57a1ac0144"
         },
         {
             "id": "downloader",
@@ -23,7 +23,7 @@
             "description": "Téléchargez des vidéos et de la musique depuis YouTube, TikTok, Instagram, etc.",
             "icon_text": "📥",
             "zip_file": "apps/downloader.zip",
-            "hash": "b60b82e280c9e5be3869e716128502f9"
+            "hash": "071b5330fe2c7b5dd3a126b56a7b7085"
         }
     ],
     "core_files": [],
