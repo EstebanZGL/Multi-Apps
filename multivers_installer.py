@@ -37,29 +37,54 @@ class WebInstaller(ctk.CTk):
 
     def _build_ui(self):
         # Header
-        self.header = ctk.CTkLabel(self, text="Multivers Launcher", font=ctk.CTkFont(size=24, weight="bold"))
-        self.header.pack(pady=20)
+        self.header = ctk.CTkLabel(
+            self, text="🚀 Multivers - Assistant d'Installation", 
+            font=ctk.CTkFont(size=26, weight="bold"),
+            text_color="#00BFFF"
+        )
+        self.header.pack(pady=(30, 10))
 
-        self.status_label = ctk.CTkLabel(self, text="Récupération des informations depuis GitHub...", font=ctk.CTkFont(slant="italic"))
-        self.status_label.pack(pady=5)
+        self.status_label = ctk.CTkLabel(
+            self, text="Connexion aux serveurs GitHub...", 
+            font=ctk.CTkFont(slant="italic", size=14)
+        )
+        self.status_label.pack(pady=(0, 15))
 
         # Scrollable area for apps
-        self.apps_frame = ctk.CTkScrollableFrame(self, label_text="Sélectionnez les applications à installer")
-        self.apps_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        self.apps_frame = ctk.CTkScrollableFrame(
+            self, label_text="Sélectionnez les modules à installer",
+            label_font=ctk.CTkFont(weight="bold", size=16),
+            border_width=2, border_color="#333333"
+        )
+        self.apps_frame.pack(fill="both", expand=True, padx=30, pady=10)
 
         # Progress bar
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.pack(fill="x", padx=20, pady=10)
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.progress_frame.pack(fill="x", padx=30, pady=(10, 0))
+        
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, progress_color="#00BFFF")
+        self.progress_bar.pack(fill="x")
         self.progress_bar.set(0)
 
         # Footer Buttons
         self.footer = ctk.CTkFrame(self, fg_color="transparent")
-        self.footer.pack(fill="x", padx=20, pady=20)
+        self.footer.pack(fill="x", padx=30, pady=20)
 
-        self.install_btn = ctk.CTkButton(self.footer, text="Démarrer l'installation", state="disabled", command=self._start_installation)
+        self.install_btn = ctk.CTkButton(
+            self.footer, text="Démarrer l'installation", 
+            state="disabled", command=self._start_installation,
+            font=ctk.CTkFont(weight="bold", size=15),
+            fg_color="#28a745", hover_color="#218838",
+            height=40
+        )
         self.install_btn.pack(side="right")
 
-        self.ollama_btn = ctk.CTkButton(self.footer, text="🔍 Vérifier Ollama", fg_color="#555568", command=self._check_ollama)
+        self.ollama_btn = ctk.CTkButton(
+            self.footer, text="🔍 Diagnostiquer Ollama", 
+            fg_color="#555568", hover_color="#444455",
+            command=self._check_ollama,
+            height=40
+        )
         self.ollama_btn.pack(side="left")
 
     def _load_remote_manifest(self):
@@ -75,14 +100,31 @@ class WebInstaller(ctk.CTk):
         threading.Thread(target=task, daemon=True).start()
 
     def _populate_apps(self):
-        self.status_label.configure(text=f"Version de l'installateur : {self.manifest_data.get('version', 'Unknown')}")
+        self.status_label.configure(text=f"Version du catalogue : {self.manifest_data.get('version', '1.0.0')}")
         
         for app in self.manifest_data.get("apps", []):
             var = tk.BooleanVar(value=True)
             self.selected_apps[app['id']] = var
             
-            cb = ctk.CTkCheckBox(self.apps_frame, text=f"{app['icon_text']} {app['name']} - {app['description']}", variable=var)
-            cb.pack(anchor="w", padx=10, pady=5)
+            # Application Card
+            app_card = ctk.CTkFrame(self.apps_frame, fg_color="#2b2b2b", corner_radius=8)
+            app_card.pack(fill="x", pady=5, padx=5)
+            
+            cb = ctk.CTkCheckBox(
+                app_card, 
+                text=f"{app['icon_text']} {app['name']}", 
+                font=ctk.CTkFont(weight="bold", size=15),
+                variable=var,
+                fg_color="#00BFFF"
+            )
+            cb.pack(anchor="w", padx=15, pady=(10, 0))
+            
+            desc = ctk.CTkLabel(
+                app_card, text=app['description'], 
+                font=ctk.CTkFont(size=12), text_color="#aaaaaa",
+                justify="left", wraplength=450
+            )
+            desc.pack(anchor="w", padx=45, pady=(0, 10))
 
         self.install_btn.configure(state="normal")
 
@@ -97,30 +139,39 @@ class WebInstaller(ctk.CTk):
                 import webbrowser
                 webbrowser.open("https://ollama.com/download")
 
-    def _start_installation(self):
-        self.install_btn.configure(state="disabled")
-        threading.Thread(target=self._installation_task, daemon=True).start()
-
     def _installation_task(self):
         try:
             os.makedirs(INSTALL_DIR, exist_ok=True)
             apps_to_install = [app for app in self.manifest_data['apps'] if self.selected_apps[app['id']].get()]
             
-            total_steps = len(apps_to_install) + 1 # +1 for core/finalization
+            # Step calculation: Core + Apps + Shortcut
+            total_steps = (1 if 'core_zip' in self.manifest_data else 0) + len(apps_to_install) + 1
             current_step = 0
 
+            # 1. Install Core if necessary
+            if 'core_zip' in self.manifest_data:
+                self._log("Téléchargement du moteur principal (Core)...")
+                core_zip_url = f"{BASE_URL}/{self.manifest_data['core_zip']}"
+                core_zip_path = os.path.join(INSTALL_DIR, "core.zip")
+                
+                self._download_file(core_zip_url, core_zip_path)
+                
+                self._log("Extraction du moteur principal...")
+                with zipfile.ZipFile(core_zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(INSTALL_DIR)
+                
+                os.remove(core_zip_path)
+                current_step += 1
+                self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
+
+            # 2. Install Apps
             for app in apps_to_install:
                 self._log(f"Téléchargement de {app['name']}...")
                 zip_url = f"{BASE_URL}/{app['zip_file']}"
                 zip_path = os.path.join(INSTALL_DIR, f"{app['id']}.zip")
                 
-                # Download
-                r = requests.get(zip_url, stream=True)
-                with open(zip_path, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                self._download_file(zip_url, zip_path)
                 
-                # Extract
                 self._log(f"Extraction de {app['name']}...")
                 app_dir = os.path.join(INSTALL_DIR, "apps", app['id'])
                 if os.path.exists(app_dir): shutil.rmtree(app_dir)
@@ -133,8 +184,7 @@ class WebInstaller(ctk.CTk):
                 current_step += 1
                 self.after(0, lambda p=current_step/total_steps: self.progress_bar.set(p))
 
-            self._log("Finalisation de l'installation...")
-            # Here we would create shortcuts, etc.
+            self._log("Création des raccourcis...")
             self._create_shortcuts()
             
             self.after(0, lambda: messagebox.showinfo("Succès", "Installation terminée avec succès !"))
@@ -144,13 +194,46 @@ class WebInstaller(ctk.CTk):
             self.after(0, lambda: messagebox.showerror("Erreur d'installation", str(e)))
             self.after(0, lambda: self.install_btn.configure(state="normal"))
 
+    def _download_file(self, url, dest_path):
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+        with open(dest_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+
     def _log(self, msg):
         self.after(0, lambda: self.status_label.configure(text=msg))
 
     def _create_shortcuts(self):
-        # Basic Windows Shortcut logic could go here
-        # (Requires winshell or similar, or just a .bat/powershell command)
-        pass
+        import subprocess
+        exe_path = os.path.join(INSTALL_DIR, "Launcher_Universel.exe")
+        if not os.path.exists(exe_path):
+            return
+
+        # Desktop Shortcut
+        desktop = os.path.join(os.environ["USERPROFILE"], "Desktop")
+        shortcut_path = os.path.join(desktop, "Multivers Launcher.lnk")
+        
+        # Start Menu Shortcut
+        start_menu = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs")
+        start_shortcut = os.path.join(start_menu, "Multivers Launcher.lnk")
+
+        powershell_cmd = f"""
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
+        $Shortcut.TargetPath = '{exe_path}'
+        $Shortcut.WorkingDirectory = '{INSTALL_DIR}'
+        $Shortcut.IconLocation = '{exe_path},0'
+        $Shortcut.Save()
+        
+        $ShortcutStart = $WshShell.CreateShortcut('{start_shortcut}')
+        $ShortcutStart.TargetPath = '{exe_path}'
+        $ShortcutStart.WorkingDirectory = '{INSTALL_DIR}'
+        $ShortcutStart.IconLocation = '{exe_path},0'
+        $ShortcutStart.Save()
+        """
+        
+        subprocess.run(["powershell", "-Command", powershell_cmd], capture_output=True)
 
 if __name__ == "__main__":
     app = WebInstaller()

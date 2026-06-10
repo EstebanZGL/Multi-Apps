@@ -82,22 +82,17 @@ def prepare_packaging():
                 "hash": get_file_hash(zip_path)
             })
 
-    # 2. Packaging du Launcher Core (si nécessaire pour AppData)
-    # Note: L'installateur pourra aussi copier le main.exe compilé par build.py
-    # Mais ici on prépare les ressources statiques si besoin.
+    # 2. Packaging du Launcher Core
     print("🏠 Préparation du Core...")
-    core_resources = ["assets"] # On n'inclut que les assets, le code est dans l'exe
-    core_output_dir = os.path.join(DATA_DIR, "core")
-    os.makedirs(core_output_dir, exist_ok=True)
-    
-    for res in core_resources:
-        src = os.path.join(SOURCE_DIR, res)
-        if os.path.exists(src):
-            dst = os.path.join(core_output_dir, res)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst)
-            else:
-                shutil.copy2(src, dst)
+    core_src = os.path.join(SOURCE_DIR, "dist", "Launcher_Universel")
+    if os.path.exists(core_src):
+        print("  - Compression du moteur principal...")
+        core_zip_path = os.path.join(DATA_DIR, "core.zip")
+        zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS)
+        install_manifest["core_zip"] = "core.zip"
+        install_manifest["core_hash"] = get_file_hash(core_zip_path)
+    else:
+        print("  ⚠️ Attention : dist/Launcher_Universel introuvable. Lancez 'build.py' d'abord !")
 
     # 3. Sauvegarde du manifest final
     with open(MANIFEST_FILE, 'w', encoding='utf-8') as f:
