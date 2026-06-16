@@ -1,5 +1,5 @@
 {
-    "id": "chat_perso",
+    "id": "ChatPerso",
     "name": "Jarvis AI",
     "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
     "icon_text": "🤖",
