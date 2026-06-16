@@ -68,14 +68,31 @@ def get_local_apps():
     
     return apps
 
-def get_remote_apps(github_manifest_url):
+def get_local_versions():
+    """Reads versions.json from the base path."""
+    base_path = get_base_path()
+    v_path = os.path.join(base_path, "versions.json")
+    if os.path.exists(v_path):
+        try:
+            with open(v_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return {"launcher": {"version": "0.0.0"}, "apps": {}}
+
+def get_remote_manifest(github_manifest_url):
+    """Fetches the full manifest from GitHub."""
     try:
         import requests
         r = requests.get(github_manifest_url, timeout=5)
         r.raise_for_status()
-        return r.json().get("apps", [])
+        return r.json()
     except:
-        return []
+        return {}
+
+def get_remote_apps(github_manifest_url):
+    """Legacy helper for backward compatibility."""
+    manifest = get_remote_manifest(github_manifest_url)
+    return manifest.get("apps", [])
 
 def load_app_module(app_manifest):
     folder = app_manifest['folder']
