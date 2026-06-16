@@ -93,6 +93,7 @@ def run_full_build():
         '--hidden-import=apps.downloader.app',
         '--hidden-import=apps.ChatPerso.app',
         '--hidden-import=apps.CERviable.app',
+        '--hidden-import=apps.MIDIa.app',
     ])
 
     os.makedirs(LOCAL_DIST, exist_ok=True)

@@ -25,15 +25,24 @@ APP_DIR = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'Multivers
 CONFIG_FILE = os.path.join(APP_DIR, 'config.json')
 
 def find_ffmpeg():
-    """Locate ffmpeg.exe in common installation paths."""
+    """Locate ffmpeg.exe and ensure it's in the PATH for yt-dlp."""
     search_paths = [
         os.path.join(BASE_DIR, "ffmpeg.exe"),
         os.path.join(BIN_DIR, "ffmpeg.exe"),
         os.path.join(BASE_DIR, "bin", "ffmpeg.exe"),
-        "ffmpeg.exe" # If in PATH
     ]
+    
+    # Also check if it's already in system PATH
+    system_ffmpeg = shutil.which("ffmpeg.exe")
+    if system_ffmpeg:
+        return system_ffmpeg
+
     for p in search_paths:
-        if shutil.which(p):
+        if os.path.exists(p):
+            # Crucial: Add the directory to PATH so yt-dlp find it automatically
+            ffmpeg_dir = os.path.dirname(p)
+            if ffmpeg_dir not in os.environ["PATH"]:
+                os.environ["PATH"] += os.pathsep + ffmpeg_dir
             return p
     return None
 

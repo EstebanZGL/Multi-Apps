@@ -181,12 +181,20 @@ class LauncherMainView(ctk.CTk):
         is_installed = app_manifest.get("is_installed", True)
         needs_update = app_manifest.get("needs_update", False)
         
-        if not is_installed or needs_update:
-            action = "Mettre à jour" if needs_update else "Installer"
-            if messagebox.askyesno(action, f"{action} '{app_manifest['name']}' ?"):
+        # 1. Mandatory Install if missing
+        if not is_installed:
+            if messagebox.askyesno("Installer", f"Installer '{app_manifest['name']}' ?"):
                 self._launch_installer()
             return
 
+        # 2. Optional Update if installed
+        if needs_update:
+            if messagebox.askyesno("Mise à jour disponible", 
+                                   f"Une mise à jour est disponible pour '{app_manifest['name']}'.\n\nVoulez-vous la mettre à jour maintenant ?\n\n(En choisissant 'Non', vous lancerez la version actuelle)."):
+                self._launch_installer()
+                return # Stop here to let the installer work
+
+        # 3. Launch the app (either up-to-date or skipped update)
         try:
             # Lazy Loading
             app_class = load_app_module(app_manifest)

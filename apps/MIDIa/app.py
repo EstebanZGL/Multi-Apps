@@ -1,8 +1,17 @@
 import os
+import sys
 import threading
+import subprocess
+import traceback
+import requests
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
+
+# IA Model URL (Zenodo)
+MODEL_URL = "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
+MODEL_NAME = "note_F1=0.9677_pedal_F1=0.9186.pth"
+MODEL_DIR = os.path.join(os.path.expanduser("~"), "piano_transcription_inference_data")
 
 class MIDIaApp(ctk.CTkFrame):
     def __init__(self, parent, controller):
@@ -39,7 +48,7 @@ class MIDIaApp(ctk.CTkFrame):
         ctk.CTkButton(file_frame, text="Parcourir", width=100, command=self._browse_file).pack(side="left")
 
         # Info Box
-        info_text = "💡 Note : La transcription utilise un modèle d'IA local. \nLe premier lancement peut être long car les bibliothèques d'IA seront chargées."
+        info_text = "💡 Note : La transcription utilise un modèle d'IA local. \nLe premier lancement téléchargera le modèle (165 Mo)."
         ctk.CTkLabel(main_box, text=info_text, font=ctk.CTkFont(size=12, slant="italic"), text_color="#aaaaaa").pack(pady=10)
 
         # Process Button
@@ -73,39 +82,135 @@ class MIDIaApp(ctk.CTkFrame):
         self.is_processing = True
         self.process_btn.configure(state="disabled", text="Analyse en cours...")
         self.progress_bar.pack(fill="x", padx=100, pady=10)
-        self.progress_bar.start()
+        self.progress_bar.set(0)
         
         threading.Thread(target=self._run_transcription, daemon=True).start()
 
     def _run_transcription(self):
         try:
-            # Here we will do the lazy loading of torch and piano_transcription_inference
-            self._update_status("Chargement du moteur d'IA...")
+            # 1. Lazy loading
+            self._update_status("Initialisation de l'IA...")
+            try:
+                import torch
+                from piano_transcription_inference import PianoTranscription, sample_rate, load_audio
+                import audioread
+            except ImportError:
+                self.after(0, self._show_dependency_error)
+                return
+
+            # 2. Ensure FFmpeg is in PATH (Required by audioread)
+            self._ensure_ffmpeg()
+
+            # 3. Check and Download Model
+            os.makedirs(MODEL_DIR, exist_ok=True)
+            checkpoint_path = os.path.join(MODEL_DIR, MODEL_NAME)
             
-            # --- SIMULATION (A remplacer par le code réel) ---
-            import time
-            time.sleep(3)
-            # ------------------------------------------------
+            if not os.path.exists(checkpoint_path):
+                self._update_status("Téléchargement du modèle IA (165 Mo)...")
+                try:
+                    r = requests.get(MODEL_URL, stream=True, timeout=30)
+                    r.raise_for_status()
+                    total = int(r.headers.get('content-length', 0))
+                    downloaded = 0
+                    with open(checkpoint_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=1024*1024):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total > 0:
+                                    self.after(0, lambda d=downloaded/total: self.progress_bar.set(d))
+                except Exception as e:
+                    if os.path.exists(checkpoint_path): os.remove(checkpoint_path)
+                    raise Exception(f"Échec du téléchargement du modèle : {e}")
+
+            # 4. Transcribe
+            self._update_status("Chargement du moteur IA...")
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            transcriber = PianoTranscription(device=device, checkpoint_path=checkpoint_path)
+
+            audio_path = self.source_file.get()
+            midi_path = audio_path.rsplit('.', 1)[0] + ".mid"
+
+            self._update_status(f"Transcription en cours sur {device}...")
             
-            self.after(0, self._on_success)
+            try:
+                import librosa
+                # Standard librosa load is more reliable than the utility function
+                audio, _ = librosa.load(audio_path, sr=sample_rate, mono=True)
+            except Exception as audio_err:
+                # Fallback to soundfile if librosa fails (sometimes happens with specific formats)
+                try:
+                    import soundfile as sf
+                    audio, _ = sf.read(audio_path)
+                    import numpy as np
+                    if len(audio.shape) > 1: audio = np.mean(audio, axis=1) # Mono
+                    audio = librosa.resample(audio, orig_sr=_, target_sr=sample_rate)
+                except:
+                    raise Exception(f"Erreur de lecture audio : {audio_err}\nAssurez-vous que FFmpeg est bien installé via l'installateur.")
+
+            transcriber.transcribe(audio, midi_path)
+            
+            self.after(0, lambda: self._on_success(midi_path))
         except Exception as e:
-            self.after(0, lambda: self._on_error(str(e)))
+            print(traceback.format_exc())
+            err_msg = str(e)
+            self.after(0, lambda m=err_msg: self._on_error(m))
+
+    def _ensure_ffmpeg(self):
+        """Ensures FFmpeg is in the PATH so audioread can find it."""
+        import shutil
+        if shutil.which("ffmpeg"): return
+        
+        # Check launcher's bin folder
+        base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.getcwd()
+        bin_dir = os.path.join(base, "bin")
+        
+        if os.path.exists(os.path.join(bin_dir, "ffmpeg.exe")):
+            if bin_dir not in os.environ["PATH"]:
+                os.environ["PATH"] += os.pathsep + bin_dir
+                print(f"DEBUG MIDIa: Added {bin_dir} to PATH")
+
+    def _show_dependency_error(self):
+        self.is_processing = False
+        self.progress_bar.pack_forget()
+        self.process_btn.configure(state="normal", text="🎹 Transcrire en MIDI")
+        self.status_label.configure(text="Dépendances manquantes.")
+        
+        if messagebox.askyesno("Dépendances manquantes", "Les bibliothèques IA (torch, piano_transcription_inference) ne sont pas installées.\n\nVoulez-vous tenter de les installer maintenant ? (Environ 1.5 Go)"):
+            threading.Thread(target=self._install_dependencies, daemon=True).start()
+
+    def _install_dependencies(self):
+        try:
+            if getattr(sys, 'frozen', False):
+                messagebox.showwarning("Installation impossible", "Utilisez la version source pour installer Torch.")
+                return
+
+            self._update_status("Installation de Torch et du moteur...")
+            cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "piano_transcription_inference"]
+            subprocess.check_call(cmd)
+            
+            messagebox.showinfo("Succès", "Dépendances installées ! Veuillez relancer la transcription.")
+            self._update_status("Prêt (Relancez).")
+        except Exception as e:
+            messagebox.showerror("Erreur d'installation", str(e))
+            self._update_status("Échec installation.")
 
     def _update_status(self, msg):
         self.after(0, lambda: self.status_label.configure(text=msg))
 
-    def _on_success(self):
+    def _on_success(self, midi_path):
         self.is_processing = False
-        self.progress_bar.stop()
-        self.progress_bar.pack_forget()
+        self.progress_bar.set(1.0)
         self.process_btn.configure(state="normal", text="🎹 Transcrire en MIDI")
         self.status_label.configure(text="Transcription terminée !")
-        messagebox.showinfo("Succès", "Le fichier MIDI a été généré avec succès !")
+        
+        if messagebox.askyesno("Succès", f"Fichier MIDI généré :\n{midi_path}\n\nVoulez-vous ouvrir le dossier ?"):
+            os.startfile(os.path.dirname(midi_path))
 
     def _on_error(self, err):
         self.is_processing = False
-        self.progress_bar.stop()
         self.progress_bar.pack_forget()
         self.process_btn.configure(state="normal", text="🎹 Transcrire en MIDI")
         self.status_label.configure(text="Erreur.")
         messagebox.showerror("Erreur", f"Une erreur est survenue :\n{err}")
+
