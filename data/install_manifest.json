@@ -7,7 +7,7 @@
             "description": "Automatisez vos rapports CER à partir de documents Prosit.",
             "icon_text": "📄",
             "zip_file": "apps/CERviable.zip",
-            "hash": "f79bc8876e527eb82b490590365bd9f8"
+            "hash": "f0711a848b415b1523ee52622c74a040"
         },
         {
             "id": "ChatPerso",
@@ -15,7 +15,7 @@
             "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
             "icon_text": "🤖",
             "zip_file": "apps/ChatPerso.zip",
-            "hash": "f38c9033afd5f4d1f1940cfa186c957b"
+            "hash": "1ef182ae80eeab6c804603d36b219818"
         },
         {
             "id": "downloader",
@@ -23,7 +23,7 @@
             "description": "Téléchargez des vidéos et de la musique depuis YouTube, TikTok, Instagram, etc.",
             "icon_text": "📥",
             "zip_file": "apps/downloader.zip",
-            "hash": "dd6144162ec889c496af61bcada71e83"
+            "hash": "885c54b91793436c0445b5d04de9412a"
         },
         {
             "id": "MIDIa",
@@ -31,12 +31,12 @@
             "description": "Transformez vos enregistrements audio de piano en fichiers MIDI grâce au Deep Learning.",
             "icon_text": "🎹",
             "zip_file": "apps/MIDIa.zip",
-            "hash": "db34509492cb85dbe206d8df9abaca90"
+            "hash": "82430c1c500ac3390bfee44d7e7bf00d"
         }
     ],
     "core_files": [],
     "core_zip": "core.zip",
-    "core_hash": "090aea7613c57504abb284b63a04da59",
+    "core_hash": "12794cd78b78c8be409117a6ff26541e",
     "ffmpeg_zip": "ffmpeg.zip",
     "ffmpeg_hash": "4fc5a42d93f7341f2aa5a8963c0300af"
 }
