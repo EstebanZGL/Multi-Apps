@@ -14,11 +14,28 @@ import requests
 import yt_dlp
 from PIL import Image
 
-# Config paths (we might want to move these to a shared config later)
-APP_DIR = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'YT_Universal_Converter')
-APP_BIN_DIR = os.path.join(APP_DIR, 'bin')
+# Config paths (Relative to the launcher installation)
+# When running as .exe, sys.executable is the Launcher
+# When running as .py, __file__ is apps/downloader/app.py
+BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.getcwd()
+BIN_DIR = os.path.join(BASE_DIR, 'bin')
+
+# Fallback for config
+APP_DIR = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'MultiversLauncher', 'downloader_config')
 CONFIG_FILE = os.path.join(APP_DIR, 'config.json')
-FFMPEG_URL = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+
+def find_ffmpeg():
+    """Locate ffmpeg.exe in common installation paths."""
+    search_paths = [
+        os.path.join(BASE_DIR, "ffmpeg.exe"),
+        os.path.join(BIN_DIR, "ffmpeg.exe"),
+        os.path.join(BASE_DIR, "bin", "ffmpeg.exe"),
+        "ffmpeg.exe" # If in PATH
+    ]
+    for p in search_paths:
+        if shutil.which(p):
+            return p
+    return None
 
 def load_settings():
     if os.path.exists(CONFIG_FILE):
@@ -306,34 +323,19 @@ class DownloaderApp(ctk.CTkFrame):
         self.after(0, update_ui)
 
     def _resolve_dependencies(self):
-        # Logic from main.py simplified for lazy loading
-        sys_ffmpeg = shutil.which("ffmpeg")
-        if sys_ffmpeg:
-            self.ffmpeg_path = os.path.dirname(sys_ffmpeg)
+        """Locate FFmpeg and update state."""
+        found_path = find_ffmpeg()
+        if found_path:
+            # We want the directory for ydl_opts['ffmpeg_location']
+            self.ffmpeg_path = os.path.dirname(found_path)
             self._finalize_init()
             return
 
-        appdata_ffmpeg = os.path.join(APP_BIN_DIR, "ffmpeg.exe")
-        if os.path.exists(appdata_ffmpeg):
-            self.ffmpeg_path = APP_BIN_DIR
-            self._finalize_init()
-            return
-
-        self.log_message("⚙️ Dépendance FFmpeg manquante. Installation...")
-        try:
-            os.makedirs(APP_BIN_DIR, exist_ok=True)
-            zip_path = os.path.join(APP_BIN_DIR, "ffm_deps.zip")
-            urllib.request.urlretrieve(FFMPEG_URL, zip_path)
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                for f_info in zip_ref.infolist():
-                    if f_info.filename.endswith(('ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe')):
-                        xp = zip_ref.extract(f_info, APP_BIN_DIR)
-                        shutil.move(xp, os.path.join(APP_BIN_DIR, os.path.basename(xp)))
-            os.remove(zip_path)
-            self.ffmpeg_path = APP_BIN_DIR
-            self._finalize_init()
-        except Exception as e:
-            self.log_message(f"❌ Erreur FFmpeg : {str(e)}")
+        self.log_message("⚙️ Dépendance FFmpeg manquante.")
+        self.log_message("Veuillez installer FFmpeg via le Multivers Installer.")
+        # We don't try to download it here anymore, the host installer should do it.
+        # But we still allow initialization to show the UI
+        self._finalize_init()
 
     def _finalize_init(self):
         self.is_ready = True

@@ -22,6 +22,9 @@ MANIFEST_URL = f"{BASE_URL}/install_manifest.json"
 # HackGPT Nextcloud Link
 HACKGPT_LINK = "https://nxt.xavest-truenas.fr/s/xi7pwXsgiD3gM4F/download"
 
+# Official FFmpeg (Gyan.dev)
+FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
 APP_NAME = "MultiversLauncher"
 INSTALL_DIR = os.path.join(os.getenv('APPDATA'), APP_NAME)
 LOCAL_MANIFEST_FILE = os.path.join(INSTALL_DIR, "install_manifest.json")
@@ -214,14 +217,24 @@ class WebInstaller(ctk.CTk):
                 os.remove(temp_app_zip)
                 current_task += 1
 
-            # 3. FFmpeg
-            if downloader_selected and 'ffmpeg_zip' in self.manifest_data:
-                if not os.path.exists(os.path.join(INSTALL_DIR, "bin", "ffmpeg.exe")):
-                    self._update_main_ui("FFmpeg : Connexion...", current_task/total_tasks)
-                    ffmpeg_zip = os.path.join(INSTALL_DIR, "ffmpeg.zip")
-                    self._download_file(f"{BASE_URL}/{self.manifest_data['ffmpeg_zip']}", ffmpeg_zip, 
+            # 3. FFmpeg (Official Source)
+            if downloader_selected:
+                bin_dir = os.path.join(INSTALL_DIR, "bin")
+                ffmpeg_exe = os.path.join(bin_dir, "ffmpeg.exe")
+                if not os.path.exists(ffmpeg_exe):
+                    os.makedirs(bin_dir, exist_ok=True)
+                    self._update_main_ui("FFmpeg : Téléchargement depuis source officielle...", current_task/total_tasks)
+                    ffmpeg_zip = os.path.join(INSTALL_DIR, "ffmpeg_official.zip")
+                    self._download_file(FFMPEG_URL, ffmpeg_zip, 
                                             self.main_cancel_requested, lambda m, p: self.after(0, lambda: self._update_main_ui(f"FFmpeg : {m}", (current_task + p)/total_tasks)))
-                    with zipfile.ZipFile(ffmpeg_zip, 'r') as z: z.extractall(os.path.join(INSTALL_DIR, "bin"))
+                    
+                    self._update_main_ui("FFmpeg : Extraction...", (current_task + 0.9)/total_tasks)
+                    with zipfile.ZipFile(ffmpeg_zip, 'r') as z:
+                        for member in z.namelist():
+                            if member.endswith("ffmpeg.exe") or member.endswith("ffprobe.exe"):
+                                filename = os.path.basename(member)
+                                with z.open(member) as source, open(os.path.join(bin_dir, filename), "wb") as target:
+                                    shutil.copyfileobj(source, target)
                     os.remove(ffmpeg_zip)
                 current_task += 1
 

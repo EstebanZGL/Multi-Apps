@@ -96,8 +96,11 @@ class LauncherMainView(ctk.CTk):
         if self.view_mode.get() == "carousel":
             self.after(0, lambda: self.show_menu(hybrid_list))
 
-    def show_menu(self, apps_list):
-        if self.current_app_frame: return # Don't interrupt a running app
+    def show_menu(self, apps_list=None):
+        self.current_app_frame = None # Reset when returning to menu
+        
+        if apps_list is None:
+            apps_list = self.local_apps
 
         # Clear container
         for child in self.container.winfo_children():

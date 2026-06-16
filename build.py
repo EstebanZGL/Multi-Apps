@@ -69,9 +69,6 @@ def run_full_build():
     print("🚀 Lancement d'un build complet PyInstaller...")
     customtkinter_path = os.path.dirname(customtkinter.__file__)
     icon_path = os.path.abspath("assets/app_icon.ico")
-    ffmpeg_path = os.path.abspath("bin/ffmpeg.exe")
-    ffplay_path = os.path.abspath("bin/ffplay.exe")
-    ffprobe_path = os.path.abspath("bin/ffprobe.exe")
     apps_dir_path = os.path.abspath("apps")
 
     # Temporary build paths
@@ -92,9 +89,6 @@ def run_full_build():
         f'--icon={icon_path}',
         f'--add-data={customtkinter_path};customtkinter/', 
         f'--add-data={apps_dir_path};apps/',
-        f'--add-binary={ffmpeg_path};.',
-        f'--add-binary={ffplay_path};.',
-        f'--add-binary={ffprobe_path};.',
         f'--workpath={build_dir}', f'--specpath={spec_dir}', f'--distpath={dist_temp_dir}',
         '--hidden-import=apps.downloader.app',
         '--hidden-import=apps.ChatPerso.app',
