@@ -31,6 +31,10 @@ class MIDIaApp(ctk.CTkFrame):
         self.calib_y = 0.8 
         self.calib_scale = 1.0 
         self.calib_offset = 0.0 
+        self.black_key_width_ratio = 0.6 
+        self.black_key_spread = 0.0 # Espacement des touches noires
+        self.visual_zoom = 1.0
+        self.analysis_mode = ctk.StringVar(value="barres") # "barres" ou "touches"
         self.calib_img_tk = None
         self.key_rects = [] 
 
@@ -129,33 +133,66 @@ class MIDIaApp(ctk.CTkFrame):
         if not ret: return
         
         self.calib_window = ctk.CTkToplevel(self)
-        self.calib_window.title("Calibration Vision (Prototype Calque)")
-        self.calib_window.geometry("1000x800")
+        self.calib_window.title("Calibration Vision (Haute Précision)")
+        self.calib_window.geometry("1100x900")
         self.calib_window.transient(self)
         
-        ctk.CTkLabel(self.calib_window, text="1. Ligne Y: Hauteur d'analyse | 2. Zoom/Décalage: Superposez le calque aux touches", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+        # --- TOP CONTROLS ---
+        top_frame = ctk.CTkFrame(self.calib_window, fg_color="transparent")
+        top_frame.pack(fill="x", padx=10, pady=5)
         
+        ctk.CTkLabel(top_frame, text="Mode d'analyse :", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10)
+        ctk.CTkRadioButton(top_frame, text="Barres tombantes (Placez Y au-dessus des touches)", variable=self.analysis_mode, value="barres").pack(side="left", padx=10)
+        ctk.CTkRadioButton(top_frame, text="Touches pressées (Placez Y SUR les touches)", variable=self.analysis_mode, value="touches").pack(side="left", padx=10)
+        
+        ctk.CTkLabel(top_frame, text=" |  Zoom Visuel :").pack(side="left", padx=10)
+        self.vzoom_slider = ctk.CTkSlider(top_frame, from_=1.0, to=3.0, number_of_steps=200, width=150)
+        self.vzoom_slider.set(self.visual_zoom)
+        self.vzoom_slider.pack(side="left", padx=10)
+        
+        ctk.CTkLabel(self.calib_window, text="💡 Déplacez le calque à la souris (Drag & Drop adouci). Ajustez finement avec les sliders en bas.", font=ctk.CTkFont(slant="italic")).pack(pady=5)
+        
+        # --- CANVAS ---
         self.calib_canvas = tk.Canvas(self.calib_window, bg="black", highlightthickness=0)
-        self.calib_canvas.pack(fill="both", expand=True, padx=20)
+        self.calib_canvas.pack(fill="both", expand=True, padx=20, pady=5)
         
         h, w = frame.shape[:2]
-        ratio = min(900/w, 500/h)
-        self.vid_w, self.vid_h = int(w*ratio), int(h*ratio)
-        prev = cv2.resize(frame, (self.vid_w, self.vid_h))
-        prev = cv2.cvtColor(prev, cv2.COLOR_BGR2RGB)
-        self.calib_img_orig = Image.fromarray(prev)
-        self.calib_img_tk = ImageTk.PhotoImage(self.calib_img_orig)
-        
-        self.cx, self.cy = 450, 250
-        self.calib_canvas.create_image(self.cx, self.cy, image=self.calib_img_tk)
-        
-        self.line_y = self.calib_canvas.create_line(self.cx-self.vid_w//2, self.cy, self.cx+self.vid_w//2, self.cy, fill="red", width=2)
+        self.base_w, self.base_h = w, h
         
         self.kb_tag = "keyboard_overlay"
+        self.drag_data = {"x": 0, "y": 0, "active": False}
+
+        def on_mouse_down(event):
+            self.drag_data["x"] = event.x
+            self.drag_data["y"] = event.y
+            self.drag_data["active"] = True
+
+        def on_mouse_drag(event):
+            if not self.drag_data["active"]: return
+            dx = event.x - self.drag_data["x"]
+            dy = event.y - self.drag_data["y"]
+            self.drag_data["x"] = event.x
+            self.drag_data["y"] = event.y
+            
+            # Drag adouci (divisé par le zoom et une constante)
+            self.calib_offset += (dx / (self.vid_w * self.visual_zoom * 2.0))
+            self.calib_y += (dy / (self.vid_h * self.visual_zoom))
+            self.calib_y = max(0.0, min(1.0, self.calib_y))
+            
+            self.y_slider.set(self.calib_y)
+            self.pan_slider.set(self.calib_offset)
+            update_view()
+
+        def on_mouse_up(event):
+            self.drag_data["active"] = False
+
+        self.calib_canvas.bind("<ButtonPress-1>", on_mouse_down)
+        self.calib_canvas.bind("<B1-Motion>", on_mouse_drag)
+        self.calib_canvas.bind("<ButtonRelease-1>", on_mouse_up)
         
-        def generate_keyboard_rects(total_width):
+        def generate_keyboard_rects(total_width, black_ratio, black_spread):
             white_width = total_width / 52.0
-            black_width = white_width * 0.6
+            black_width = white_width * black_ratio
             is_black = [False, True, False]
             for _ in range(7):
                 is_black.extend([False, True, False, True, False, False, True, False, True, False, True, False])
@@ -165,28 +202,56 @@ class MIDIaApp(ctk.CTkFrame):
             current_white_x = 0
             
             for i, black in enumerate(is_black):
+                note_mod = (21 + i) % 12
                 if not black:
                     rects.append([current_white_x, current_white_x + white_width, False, i])
                     current_white_x += white_width
                 else:
-                    center_x = current_white_x
+                    # Calcul de l'espacement pour les touches noires
+                    dx = 0
+                    if note_mod == 1: dx = -black_spread   # C#
+                    elif note_mod == 3: dx = black_spread  # D#
+                    elif note_mod == 6: dx = -black_spread # F#
+                    elif note_mod == 8: dx = 0             # G# (Centré)
+                    elif note_mod == 10: dx = black_spread # A#
+                    
+                    center_x = current_white_x + (dx * white_width)
                     rects.append([center_x - black_width/2, center_x + black_width/2, True, i])
             return rects
 
-        self.base_rects = generate_keyboard_rects(self.vid_w)
-
         def update_view(*args):
-            self.calib_y = float(self.y_slider.get())
-            y_p = self.cy - self.vid_h//2 + int(self.vid_h * self.calib_y)
-            self.calib_canvas.coords(self.line_y, self.cx-self.vid_w//2, y_p, self.cx+self.vid_w//2, y_p)
+            self.visual_zoom = float(self.vzoom_slider.get())
             
-            self.calib_canvas.delete(self.kb_tag)
+            # Canvas size
+            cw = self.calib_canvas.winfo_width()
+            ch = self.calib_canvas.winfo_height()
+            if cw < 100: cw, ch = 960, 500 # Default fallback
+            
+            # Resize image with visual zoom
+            ratio = min(cw/w, ch/h) * self.visual_zoom
+            self.vid_w, self.vid_h = int(w*ratio), int(h*ratio)
+            
+            prev = cv2.resize(frame, (self.vid_w, self.vid_h))
+            prev = cv2.cvtColor(prev, cv2.COLOR_BGR2RGB)
+            self.calib_img_orig = Image.fromarray(prev)
+            self.calib_img_tk = ImageTk.PhotoImage(self.calib_img_orig)
+            
+            self.calib_canvas.delete("all")
+            cx, cy = cw//2, ch//2
+            self.calib_canvas.create_image(cx, cy, image=self.calib_img_tk)
+            
+            self.calib_y = float(self.y_slider.get())
+            y_p = cy - self.vid_h//2 + int(self.vid_h * self.calib_y)
+            self.calib_canvas.create_line(cx-self.vid_w//2, y_p, cx+self.vid_w//2, y_p, fill="red", width=2, tags=self.kb_tag)
             
             scale = float(self.zoom_slider.get())
-            offset = float(self.pan_slider.get()) * self.vid_w
+            self.calib_offset = float(self.pan_slider.get())
+            offset = self.calib_offset * self.vid_w
+            b_ratio = float(self.bw_slider.get())
+            b_spread = float(self.bs_slider.get())
             
-            img_left_x = self.cx - self.vid_w//2
-            
+            self.base_rects = generate_keyboard_rects(self.vid_w, b_ratio, b_spread)
+            img_left_x = cx - self.vid_w//2
             self.key_rects = []
             
             for r in self.base_rects:
@@ -207,32 +272,62 @@ class MIDIaApp(ctk.CTkFrame):
             
             self.key_rects.sort(key=lambda x: x[3])
 
-        ctk.CTkLabel(self.calib_window, text="Ligne Y (Hauteur)").pack()
-        self.y_slider = ctk.CTkSlider(self.calib_window, from_=0, to=1, command=update_view)
+        # Make sure canvas size is ready
+        self.calib_window.update()
+        
+        # --- BOTTOM CONTROLS ---
+        y_frame = ctk.CTkFrame(self.calib_window, fg_color="transparent")
+        y_frame.pack(fill="x", padx=40, pady=2)
+        ctk.CTkLabel(y_frame, text="Hauteur de la ligne d'analyse (Y)").pack(side="left")
+        self.y_slider = ctk.CTkSlider(y_frame, from_=0, to=1, number_of_steps=1000, command=update_view)
         self.y_slider.set(self.calib_y)
-        self.y_slider.pack(fill="x", padx=40, pady=5)
+        self.y_slider.pack(side="left", fill="x", expand=True, padx=10)
         
         ctrl_frame = ctk.CTkFrame(self.calib_window, fg_color="transparent")
         ctrl_frame.pack(fill="x", padx=40, pady=5)
         
-        z_frame = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        # Row 1
+        r1 = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        r1.pack(fill="x", pady=2)
+        
+        z_frame = ctk.CTkFrame(r1, fg_color="transparent")
         z_frame.pack(side="left", fill="x", expand=True, padx=5)
-        ctk.CTkLabel(z_frame, text="Zoom Clavier").pack()
-        self.zoom_slider = ctk.CTkSlider(z_frame, from_=0.1, to=5.0, command=update_view)
+        ctk.CTkLabel(z_frame, text="Zoom Clavier (Largeur)").pack()
+        self.zoom_slider = ctk.CTkSlider(z_frame, from_=0.5, to=1.5, number_of_steps=2000, command=update_view)
         self.zoom_slider.set(1.0)
         self.zoom_slider.pack(fill="x")
         
-        p_frame = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        p_frame = ctk.CTkFrame(r1, fg_color="transparent")
         p_frame.pack(side="right", fill="x", expand=True, padx=5)
         ctk.CTkLabel(p_frame, text="Décalage Gauche/Droite").pack()
-        self.pan_slider = ctk.CTkSlider(p_frame, from_=-2.0, to=2.0, command=update_view)
-        self.pan_slider.set(0.0)
+        self.pan_slider = ctk.CTkSlider(p_frame, from_=-0.5, to=0.5, number_of_steps=2000, command=update_view)
+        self.pan_slider.set(self.calib_offset)
         self.pan_slider.pack(fill="x")
+        
+        # Row 2
+        r2 = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        r2.pack(fill="x", pady=2)
+        
+        bw_frame = ctk.CTkFrame(r2, fg_color="transparent")
+        bw_frame.pack(side="left", fill="x", expand=True, padx=5)
+        ctk.CTkLabel(bw_frame, text="Épaisseur Touches Noires").pack()
+        self.bw_slider = ctk.CTkSlider(bw_frame, from_=0.2, to=1.0, number_of_steps=100, command=update_view)
+        self.bw_slider.set(self.black_key_width_ratio)
+        self.bw_slider.pack(fill="x")
+        
+        bs_frame = ctk.CTkFrame(r2, fg_color="transparent")
+        bs_frame.pack(side="right", fill="x", expand=True, padx=5)
+        ctk.CTkLabel(bs_frame, text="Espacement Touches Noires").pack()
+        self.bs_slider = ctk.CTkSlider(bs_frame, from_=-0.3, to=0.3, number_of_steps=100, command=update_view)
+        self.bs_slider.set(self.black_key_spread)
+        self.bs_slider.pack(fill="x")
 
+        self.vzoom_slider.configure(command=update_view)
         update_view()
-        ctk.CTkButton(self.calib_window, text="🚀 Lancer l'analyse", fg_color="#2E8B57", command=self._confirm_video_processing).pack(pady=20)
+        ctk.CTkButton(self.calib_window, text="🚀 Valider et Lancer l'analyse", fg_color="#2E8B57", command=self._confirm_video_processing).pack(pady=10)
 
     def _confirm_video_processing(self):
+        self.calib_y = self.y_slider.get()
         self.calib_window.destroy()
         self._set_ui_processing(True, "video")
         self.start_time = time.time()
@@ -244,7 +339,7 @@ class MIDIaApp(ctk.CTkFrame):
             import cv2
             import numpy as np
             import mido
-            self._update_status("Analyse visuelle (Prototype Calque)...")
+            self._update_status(f"Analyse visuelle ({self.analysis_mode.get()})...")
             v_path = self.video_file.get()
             mid_path = v_path.rsplit('.', 1)[0] + ".mid"
             
@@ -292,16 +387,30 @@ class MIDIaApp(ctk.CTkFrame):
                     val_p90 = np.percentile(zone_v, 90)
                     sat_p90 = np.percentile(zone_s, 90)
                     
-                    if not keys[i]:
-                        is_on = (val_p90 > 60 and sat_p90 > 60) or (val_p90 > 170)
-                        if is_on:
-                            keys[i] = True
-                            events.append((current_ticks, 'note_on', 21+i, 100))
+                    if self.analysis_mode.get() == "barres":
+                        # Mode Barres tombantes (Saturation élevée = couleur = ON)
+                        if not keys[i]:
+                            is_on = (val_p90 > 60 and sat_p90 > 60) or (val_p90 > 170)
+                            if is_on:
+                                keys[i] = True
+                                events.append((current_ticks, 'note_on', 21+i, 100))
+                        else:
+                            is_on = (val_p90 > 30 and sat_p90 > 30) or (val_p90 > 90)
+                            if not is_on:
+                                keys[i] = False
+                                events.append((current_ticks, 'note_off', 21+i, 0))
                     else:
-                        is_on = (val_p90 > 30 and sat_p90 > 30) or (val_p90 > 90)
-                        if not is_on:
-                            keys[i] = False
-                            events.append((current_ticks, 'note_off', 21+i, 0))
+                        # Mode Touches pressées (Les touches s'illuminent en couleur ou très vif)
+                        if not keys[i]:
+                            is_on = (val_p90 > 120 and sat_p90 > 40) or (val_p90 > 230)
+                            if is_on:
+                                keys[i] = True
+                                events.append((current_ticks, 'note_on', 21+i, 100))
+                        else:
+                            is_on = (val_p90 > 80 and sat_p90 > 20) or (val_p90 > 180)
+                            if not is_on:
+                                keys[i] = False
+                                events.append((current_ticks, 'note_off', 21+i, 0))
                         
                 f_idx += 1
                 if f_idx % 30 == 0: self.after(0, lambda p=f_idx/total_f: self.progress_bar.set(p))
