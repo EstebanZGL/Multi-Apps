@@ -136,19 +136,27 @@ class LauncherMainView(ctk.CTk):
             self._launch_installer()
 
     def _launch_installer(self):
+        """Launches the Multivers Installer to handle updates or new installs."""
+        base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.getcwd()
+        
+        # 1. Try EXE first (Production mode)
+        exe_path = os.path.join(base, "Multivers_Installer.exe")
+        
+        # 2. Try Python script (Dev mode)
+        script_path = os.path.join(base, "multivers_installer.py")
+
         try:
             import subprocess
-            if os.path.exists("multivers_installer.py"):
-                subprocess.Popen([sys.executable, "multivers_installer.py"])
+            if os.path.exists(exe_path):
+                print(f"DEBUG: Launching EXE installer: {exe_path}")
+                subprocess.Popen([exe_path], cwd=base)
+            elif os.path.exists(script_path):
+                print(f"DEBUG: Launching Python installer: {script_path}")
+                subprocess.Popen([sys.executable, script_path], cwd=base)
             else:
-                # In frozen mode, assume exe is next to us
-                base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.getcwd()
-                exe = os.path.join(base, "Multivers_Installer.exe")
-                if os.path.exists(exe):
-                    subprocess.Popen([exe])
-                else:
-                    messagebox.showinfo("Info", "Lancer Multivers_Installer.exe pour effectuer les mises à jour.")
-        except: pass
+                messagebox.showerror("Erreur", f"Installateur introuvable.\nRecherché dans : {base}\n\nVeuillez réinstaller le Launcher.")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de lancer l'installateur :\n{e}")
 
     def show_menu(self, apps_list=None):
         self.current_app_frame = None # Reset when returning to menu
