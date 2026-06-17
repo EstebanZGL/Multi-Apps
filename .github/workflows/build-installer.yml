@@ -27,22 +27,27 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --windowed --name="Multivers_Installer" --icon="assets/app_icon.ico" --add-data="assets;assets/" multivers_installer.py
 
+      - name: Build Core Archives
+        run: |
+          python build.py
+          python pack_installer.py
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Multivers_Installer.exe
+          files: |
+            dist/Multivers_Installer.exe
+            build_installer/data/core.zip
+            build_installer/data/ffmpeg.zip
           name: Multivers Suite Release ${{ github.ref_name }}
           body: |
             🚀 Nouvelle mise à jour du Multivers !
             
-            Cette release contient le **Web-Installer** permettant d'installer :
-            - CERviable
-            - Jarvis Native
-            - Downloader Universel
+            Cette release contient le **Web-Installer** permettant d'installer et de mettre à jour le système.
             
             **Instructions :**
             1. Téléchargez `Multivers_Installer.exe`.
             2. Lancez-le directement.
-            3. Sélectionnez vos applications.
+            3. L'installateur téléchargera automatiquement les dépendances requises (core.zip, ffmpeg.zip).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
