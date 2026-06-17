@@ -198,7 +198,8 @@ class WebInstaller(ctk.CTk):
             # 1. Core
             if needs_core and 'core_zip' in self.manifest_data:
                 self._update_main_ui("Moteur : Connexion...", current_task/total_tasks)
-                self._download_file(f"{BASE_URL}/{self.manifest_data['core_zip']}", os.path.join(INSTALL_DIR, "core.zip"), 
+                core_url = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/releases/latest/download/core.zip"
+                self._download_file(core_url, os.path.join(INSTALL_DIR, "core.zip"), 
                                         self.main_cancel_requested, lambda m, p: self.after(0, lambda: self._update_main_ui(f"Moteur : {m}", (current_task + p)/total_tasks)))
                 with zipfile.ZipFile(os.path.join(INSTALL_DIR, "core.zip"), 'r') as z: z.extractall(INSTALL_DIR)
                 os.remove(os.path.join(INSTALL_DIR, "core.zip"))
