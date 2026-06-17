@@ -47,7 +47,8 @@ def deploy():
 
     # 5. Commit et Push
     print("📤 Envoi vers GitHub...")
-    run_git(["add", "data"])
+    # Utiliser -f pour forcer l'ajout des .zip qui sont dans le .gitignore
+    run_git(["add", "-f", "data"])
     status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
     if status:
         run_git(["commit", "-m", "🚀 Mise à jour automatique des builds d'applications"])
