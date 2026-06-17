@@ -62,9 +62,19 @@ def prepare_packaging():
     if os.path.exists(BUILD_DIR):
         shutil.rmtree(BUILD_DIR)
     os.makedirs(DATA_DIR, exist_ok=True)
+    
+    # Lecture des versions locales
+    versions = {}
+    versions_file = os.path.join(SOURCE_DIR, "versions.json")
+    if os.path.exists(versions_file):
+        try:
+            with open(versions_file, 'r', encoding='utf-8') as f:
+                versions = json.load(f)
+        except Exception as e:
+            print(f"Erreur lecture versions.json : {e}")
 
     install_manifest = {
-        "version": "1.0.0",
+        "version": versions.get("launcher", {}).get("version", "1.0.0"),
         "apps": [],
         "core_files": []
     }
@@ -90,10 +100,14 @@ def prepare_packaging():
             # Zipper l'application
             zip_directory(app_src, zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS)
             
+            # Récupérer la version de l'app depuis versions.json
+            app_version = versions.get("apps", {}).get(app_id, {}).get("version", "1.0.0")
+            
             # Ajouter au manifest d'installation
             install_manifest["apps"].append({
                 "id": app_id,
                 "name": app_info.get("name", app_id),
+                "version": app_version,
                 "description": app_info.get("description", ""),
                 "icon_text": app_info.get("icon_text", "📦"),
                 "zip_file": f"apps/{app_id}.zip",
