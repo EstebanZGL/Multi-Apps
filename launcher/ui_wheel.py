@@ -105,7 +105,8 @@ class AppWheel(ctk.CTkFrame):
             
             # Draw circle
             tag = f"app_{i}"
-            self.canvas.create_oval(x-size, y-size, x+size, y+size, fill=color, outline=border_color, width=2, tags=tag)
+            circle_tag = f"circle_{i}"
+            self.canvas.create_oval(x-size, y-size, x+size, y+size, fill=color, outline=border_color, width=2, tags=(tag, circle_tag))
             
             # Draw icon text
             self.canvas.create_text(x, y-10, text=app.get("icon_text", "📦"), font=("Arial", 35), fill=text_color, tags=tag, state="disabled")
@@ -116,8 +117,8 @@ class AppWheel(ctk.CTkFrame):
             self.canvas.create_text(x, y+25, text=app_name, font=("Arial", 10, "bold" if is_selected else "normal"), fill=text_color, tags=tag, state="disabled", justify="center")
             
             self.canvas.tag_bind(tag, "<Button-1>", lambda e, a=app: self.on_select(a))
-            self.canvas.tag_bind(tag, "<Enter>", lambda e, t=tag: self.canvas.itemconfig(t, outline="white"))
-            self.canvas.tag_bind(tag, "<Leave>", lambda e, t=tag: self.canvas.itemconfig(t, outline="#555568"))
+            self.canvas.tag_bind(tag, "<Enter>", lambda e, t=circle_tag: self.canvas.itemconfig(t, outline="white"))
+            self.canvas.tag_bind(tag, "<Leave>", lambda e, t=circle_tag: self.canvas.itemconfig(t, outline="#555568"))
 
     def rotate_to_app(self, index):
         # Target angle for app i to be at top (-pi/2)
