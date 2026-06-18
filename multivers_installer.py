@@ -75,10 +75,16 @@ class WebInstaller(ctk.CTk):
     def _build_ui(self):
         # Header
         self.header = ctk.CTkLabel(self, text="🚀 Multivers Suite", font=ctk.CTkFont(size=28, weight="bold"), text_color="#00BFFF")
-        self.header.pack(pady=(30, 5))
+        self.header.pack(pady=(20, 5))
 
-        self.version_label = ctk.CTkLabel(self, text="Chargement...", font=ctk.CTkFont(slant="italic"))
-        self.version_label.pack(pady=(0, 10))
+        top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        top_bar.pack(fill="x", padx=30, pady=5)
+        
+        self.version_label = ctk.CTkLabel(top_bar, text="Moteur : Chargement...", font=ctk.CTkFont(slant="italic"))
+        self.version_label.pack(side="left")
+        
+        self.refresh_btn = ctk.CTkButton(top_bar, text="🔄 Vérifier les mises à jour", width=150, command=self._load_remote_manifest)
+        self.refresh_btn.pack(side="right")
 
         # Clickable Link
         path_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -110,7 +116,7 @@ class WebInstaller(ctk.CTk):
 
         # Footer
         self.footer = ctk.CTkFrame(self, fg_color="transparent")
-        self.footer.pack(fill="x", padx=30, pady=20)
+        self.footer.pack(fill="x", padx=30, pady=10)
 
         self.action_btn = ctk.CTkButton(self.footer, text="Démarrer l'installation", state="disabled", command=self._handle_action, fg_color="#28a745", height=45)
         self.action_btn.pack(side="right", padx=5)
@@ -126,29 +132,77 @@ class WebInstaller(ctk.CTk):
         self.action_btn.configure(text="Désinstaller" if mode == "uninstall" else "Démarrer l'installation", fg_color="#dc3545" if mode == "uninstall" else "#28a745")
 
     def _load_remote_manifest(self):
+        self.status_label.configure(text="Vérification des versions en ligne...")
+        self.refresh_btn.configure(state="disabled")
+        
+        # Clear UI
+        for widget in self.apps_frame.winfo_children():
+            widget.destroy()
+            
         def task():
             try:
-                r = requests.get(MANIFEST_URL, timeout=10)
+                # Add timestamp to bypass GitHub caching
+                url_no_cache = f"{MANIFEST_URL}?t={int(time.time())}"
+                r = requests.get(url_no_cache, timeout=10)
                 r.raise_for_status()
                 self.manifest_data = r.json()
+                # Also reload local manifest just in case
+                self.local_manifest = self._load_local_manifest()
                 self.after(0, self._populate_apps)
             except Exception as e:
                 self.after(0, lambda: self.status_label.configure(text=f"Erreur catalogue: {e}"))
+            finally:
+                self.after(0, lambda: self.refresh_btn.configure(state="normal"))
+                
         threading.Thread(target=task, daemon=True).start()
 
     def _populate_apps(self):
         if not self.manifest_data: return
+        
         v_cloud = self.manifest_data.get('version', '1.0.0')
         v_local = self.local_manifest.get('version', 'Aucune') if self.local_manifest else "Aucune"
-        self.version_label.configure(text=f"Version Cloud : v{v_cloud} | Installée : {v_local}")
+        core_needs_update = (v_cloud != v_local)
+        
+        status_text = f"Moteur : Cloud v{v_cloud} | Local : {v_local}"
+        if core_needs_update: status_text += " (MAJ Requise !)"
+        self.version_label.configure(text=status_text, text_color="#f1c40f" if core_needs_update else "#bdc3c7")
+        
         for app in self.manifest_data.get("apps", []):
-            var = tk.BooleanVar(value=True)
-            self.selected_apps[app['id']] = var
+            app_id = app['id']
+            v_app_cloud = app.get('version', '1.0.0')
+            
+            # Find local version
+            v_app_local = "Non installé"
+            if self.local_manifest:
+                for local_app in self.local_manifest.get("apps", []):
+                    if local_app['id'] == app_id:
+                        v_app_local = local_app.get('version', '1.0.0')
+                        break
+            
+            needs_update = (v_app_cloud != v_app_local)
+            
+            # Auto-select if not installed or needs update
+            var = tk.BooleanVar(value=needs_update or v_app_local == "Non installé")
+            self.selected_apps[app_id] = var
+            
             card = ctk.CTkFrame(self.apps_frame, fg_color="#2b2b2b", corner_radius=8)
             card.pack(fill="x", pady=5, padx=5)
-            ctk.CTkCheckBox(card, text=f"{app['icon_text']} {app['name']}", variable=var, font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 0))
+            
+            top_c = ctk.CTkFrame(card, fg_color="transparent")
+            top_c.pack(fill="x", anchor="w", padx=15, pady=(10, 0))
+            
+            ctk.CTkCheckBox(top_c, text=f"{app['icon_text']} {app['name']}", variable=var, font=ctk.CTkFont(weight="bold")).pack(side="left")
+            
+            ver_text = f"Cloud: v{v_app_cloud} | Local: {v_app_local}"
+            if needs_update and v_app_local != "Non installé":
+                ver_text += " (MAJ DISPO)"
+            
+            ctk.CTkLabel(top_c, text=ver_text, font=ctk.CTkFont(size=10, weight="bold"), text_color="#f1c40f" if needs_update else "#2ecc71").pack(side="right")
+            
             ctk.CTkLabel(card, text=app['description'], font=ctk.CTkFont(size=11), text_color="#aaaaaa", justify="left").pack(anchor="w", padx=45, pady=(0, 10))
+            
         self.action_btn.configure(state="normal")
+        self.status_label.configure(text="Catalogue synchronisé.")
 
     def _download_file(self, url, dest_path, cancel_event, update_func):
         """High performance download logic."""
