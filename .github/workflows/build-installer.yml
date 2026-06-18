@@ -28,6 +28,8 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed --name="Multivers_Installer" --icon="assets/app_icon.ico" --add-data="assets;assets/" multivers_installer.py
 
       - name: Build Core Archives
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           python build.py
           python pack_installer.py
