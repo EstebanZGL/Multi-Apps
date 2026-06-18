@@ -71,9 +71,8 @@ def run_full_build():
     icon_path = os.path.abspath("assets/app_icon.ico")
     apps_dir_path = os.path.abspath("apps")
 
-    # Temporary build paths
-    import tempfile
-    temp_dir = os.path.join(tempfile.gettempdir(), "pyinstaller_build_launcher")
+    # Local build paths to avoid cross-drive issues on CI runners
+    temp_dir = os.path.abspath("pyinstaller_temp")
     build_dir = os.path.join(temp_dir, "build")
     spec_dir = os.path.join(temp_dir, "spec")
     dist_temp_dir = os.path.join(temp_dir, "dist")
@@ -99,6 +98,10 @@ def run_full_build():
     os.makedirs(LOCAL_DIST, exist_ok=True)
     if os.path.exists(TARGET_PATH): shutil.rmtree(TARGET_PATH, ignore_errors=True)
     shutil.move(os.path.join(dist_temp_dir, DIST_NAME), TARGET_PATH)
+    
+    # Cleanup local temp dir
+    if os.path.exists(temp_dir): shutil.rmtree(temp_dir, ignore_errors=True)
+    
     print(f"✨ Build complet terminé : {TARGET_PATH}")
 
 def main():
