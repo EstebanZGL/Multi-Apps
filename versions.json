@@ -1,0 +1,28 @@
+{
+    "launcher": {
+        "version": "1.0.9",
+        "last_build_hash": "9698e9c3293caeaf5ec1042678d3ea166b256b2ab9661894dfaefbf0d78dd29892b44ffed91943506842272400f386fdd41d8cd98f00b204e9800998ecf8427e8c2172ef006cb3930884aebc94c614be"
+    },
+    "apps": {
+        "downloader": {
+            "version": "1.0.3",
+            "last_build_hash": "747e64bc875929d9e9c1450d4ee1d67a"
+        },
+        "ChatPerso": {
+            "version": "1.0.2",
+            "last_build_hash": "4f4d183feb6f6dbad7a7ea8f9c09210e"
+        },
+        "cer_automator": {
+            "version": "1.0.1",
+            "last_build_hash": "dd18440c09acfa7396b697cffe8f70f0"
+        },
+        "CERviable": {
+            "version": "1.0.1",
+            "last_build_hash": "52855258afc1b181ea01741c07ec8871"
+        },
+        "MIDIa": {
+            "version": "1.0.4",
+            "last_build_hash": "a5efb800ad46a841881b2129370d1f7a"
+        }
+    }
+}

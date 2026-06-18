@@ -3,3 +3,11 @@ yt-dlp
 requests
 pillow
 python-docx
+numpy
+opencv-python
+mido
+librosa
+soundfile
+audioread
+torch
+torchaudio

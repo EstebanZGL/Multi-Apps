@@ -21,7 +21,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install customtkinter requests pillow PyInstaller
+          pip install -r requirements.txt
+          pip install PyInstaller
 
       - name: Build Installer EXE
         run: |
