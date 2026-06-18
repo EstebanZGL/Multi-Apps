@@ -41,6 +41,7 @@ jobs:
             dist/Multivers_Installer.exe
             build_installer/data/core.zip
             build_installer/data/ffmpeg.zip
+          fail_on_unmatched_files: true
           name: Multivers Suite Release ${{ github.ref_name }}
           body: |
             🚀 Nouvelle mise à jour du Multivers !

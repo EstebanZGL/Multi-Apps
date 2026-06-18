@@ -3,6 +3,7 @@ import shutil
 import zipfile
 import json
 import hashlib
+import sys
 
 # --- Configuration ---
 SOURCE_DIR = os.getcwd()
@@ -31,12 +32,9 @@ def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None, excl
     
     with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(src_dir):
-            # Calcul du chemin relatif par rapport à la racine source
             rel_root = os.path.relpath(root, src_dir)
             path_parts = rel_root.split(os.sep)
 
-            # 1. Exclusion des dossiers (basée sur le nom ou le chemin)
-            # On vérifie si l'un des dossiers parents ou le dossier actuel est à exclure
             should_skip_dir = False
             for d_to_exclude in exclude_dirs:
                 if d_to_exclude in path_parts:
@@ -57,7 +55,7 @@ def zip_directory(src_dir, zip_name, exclude_files=None, exclude_dirs=None, excl
                 rel_path = os.path.relpath(full_path, src_dir)
                 zipf.write(full_path, rel_path)
 
-def prepare_packaging():
+def prepare_packaging(version_override=None):
     print("🧹 Nettoyage du dossier build...")
     if os.path.exists(BUILD_DIR):
         shutil.rmtree(BUILD_DIR)
@@ -73,14 +71,19 @@ def prepare_packaging():
         except Exception as e:
             print(f"Erreur lecture versions.json : {e}")
 
+    # Priorité : Argument (Tag GitHub) > versions.json > Défaut
+    manifest_version = version_override
+    if not manifest_version:
+        manifest_version = versions.get("launcher", {}).get("version", "1.0.0")
+
     install_manifest = {
-        "version": versions.get("launcher", {}).get("version", "1.0.0"),
+        "version": manifest_version,
         "apps": [],
         "core_files": []
     }
 
     # 1. Packaging des Applications
-    print("📦 Packaging des applications...")
+    print(f"📦 Packaging des applications (Manifest v{manifest_version})...")
     apps_output_dir = os.path.join(DATA_DIR, "apps")
     os.makedirs(apps_output_dir, exist_ok=True)
 
@@ -90,20 +93,17 @@ def prepare_packaging():
             print(f"  - {app_id}...")
             zip_path = os.path.join(apps_output_dir, f"{app_id}.zip")
             
-            # Lire le manifest d'origine pour récupérer les infos
             orig_manifest_path = os.path.join(app_src, "manifest.json")
             app_info = {}
             if os.path.exists(orig_manifest_path):
                 with open(orig_manifest_path, 'r', encoding='utf-8') as f:
                     app_info = json.load(f)
 
-            # Zipper l'application
             zip_directory(app_src, zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS)
             
             # Récupérer la version de l'app depuis versions.json
             app_version = versions.get("apps", {}).get(app_id, {}).get("version", "1.0.0")
             
-            # Ajouter au manifest d'installation
             install_manifest["apps"].append({
                 "id": app_id,
                 "name": app_info.get("name", app_id),
@@ -120,12 +120,11 @@ def prepare_packaging():
     if os.path.exists(core_src):
         print("  - Compression du moteur principal (sans binaires lourds ni apps)...")
         core_zip_path = os.path.join(DATA_DIR, "core.zip")
-        # On ajoute 'apps' aux dossiers à exclure spécifiquement pour le core
         zip_directory(core_src, core_zip_path, GLOBAL_EXCLUDE_FILES, GLOBAL_EXCLUDE_DIRS + ["apps"], exclude_heavy=True)
         install_manifest["core_zip"] = "core.zip"
         install_manifest["core_hash"] = get_file_hash(core_zip_path)
         
-        # Packager FFmpeg séparément s'il existe
+        # Packager FFmpeg séparément
         bin_dir = os.path.join(SOURCE_DIR, "bin")
         if os.path.exists(bin_dir):
             print("  - Packaging des binaires FFmpeg séparément...")
@@ -144,4 +143,5 @@ def prepare_packaging():
     print(f"📄 Manifest généré avec {len(install_manifest['apps'])} applications.")
 
 if __name__ == "__main__":
-    prepare_packaging()
+    ver = sys.argv[1] if len(sys.argv) > 1 else None
+    prepare_packaging(ver)
