@@ -93,12 +93,15 @@ def run_full_build():
         '--hidden-import=apps.ChatPerso.app',
         '--hidden-import=apps.CERviable.app',
         '--hidden-import=apps.MIDIa.app',
-        '--hidden-import=numpy',
-        '--hidden-import=cv2',
-        '--hidden-import=PIL',
-        '--hidden-import=audioread',
-        '--hidden-import=mido',
-        '--hidden-import=requests',
+        # Force la collecte intégrale pour éviter les ModuleNotFoundError au runtime
+        '--collect-all=numpy',
+        '--collect-all=cv2',
+        '--collect-all=PIL',
+        '--collect-all=mido',
+        '--collect-all=audioread',
+        '--collect-all=requests',
+        # On inclut soundfile pour la lecture audio de secours
+        '--collect-all=soundfile',
     ])
 
     os.makedirs(LOCAL_DIST, exist_ok=True)
