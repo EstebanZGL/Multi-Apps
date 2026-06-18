@@ -1,5 +1,5 @@
 {
-    "version": "1.0.7",
+    "version": "1.0.9",
     "apps": [
         {
             "id": "CERviable",
@@ -8,7 +8,7 @@
             "description": "Automatisez vos rapports CER à partir de documents Prosit.",
             "icon_text": "📄",
             "zip_file": "apps/CERviable.zip",
-            "hash": "c2457be8f5f14b54743eccfee0fe8156"
+            "hash": "fdada057bd148ec80953e4a7e3941732"
         },
         {
             "id": "ChatPerso",
@@ -17,7 +17,7 @@
             "description": "Assistant IA local et Cloud propulsé par Ollama et Gemini.",
             "icon_text": "🤖",
             "zip_file": "apps/ChatPerso.zip",
-            "hash": "03014df293a4760a59a43a60f2d32bbd"
+            "hash": "acf755a7c09bf31151d74b96d7d957fc"
         },
         {
             "id": "downloader",
@@ -26,21 +26,21 @@
             "description": "Téléchargez des vidéos et de la musique depuis YouTube, TikTok, Instagram, etc.",
             "icon_text": "📥",
             "zip_file": "apps/downloader.zip",
-            "hash": "04aa652aa1a9c8faae63e3935d5b6b5b"
+            "hash": "a6c45ccf247ce67c98fbdebd11cbdc24"
         },
         {
             "id": "MIDIa",
             "name": "MIDIa",
-            "version": "1.0.2",
+            "version": "1.0.4",
             "description": "Transformez vos enregistrements audio de piano en fichiers MIDI grâce au Deep Learning.",
             "icon_text": "🎹",
             "zip_file": "apps/MIDIa.zip",
-            "hash": "da4f9a6063e335d79eba4a322f064283"
+            "hash": "190541b99d8e9bd88205545574127434"
         }
     ],
     "core_files": [],
     "core_zip": "core.zip",
-    "core_hash": "349ba51e43ebd3d052fc98712f3cf377",
+    "core_hash": "1d779ab036d4c51e029f1e44eb3e45bc",
     "ffmpeg_zip": "ffmpeg.zip",
     "ffmpeg_hash": "4fc5a42d93f7341f2aa5a8963c0300af"
 }
