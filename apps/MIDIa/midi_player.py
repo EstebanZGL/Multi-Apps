@@ -12,6 +12,7 @@ class MidiPlayer:
         self._is_playing = False
         self._current_time = 0.0
         self._total_time = 0.0
+        self.playback_messages = []
 
     def play(self, midi_path, on_progress_callback=None):
         self.stop()
@@ -22,7 +23,22 @@ class MidiPlayer:
         
         try:
             mid = mido.MidiFile(midi_path)
-            self._total_time = mid.length
+            
+            # Pre-calculate playback messages to know the exact total time instantly
+            tempo = 500000
+            ticks_per_beat = mid.ticks_per_beat
+            messages = list(mido.merge_tracks(mid.tracks))
+            
+            self.playback_messages = []
+            current_sec = 0.0
+            for msg in messages:
+                if msg.is_meta and msg.type == 'set_tempo':
+                    tempo = msg.tempo
+                delta_sec = mido.tick2second(msg.time, ticks_per_beat, tempo)
+                current_sec += delta_sec
+                self.playback_messages.append((current_sec, msg))
+                
+            self._total_time = current_sec
         except Exception as e:
             self._is_playing = False
             raise e
@@ -35,13 +51,8 @@ class MidiPlayer:
                 start_playback_time = time.time()
                 accumulated_pause_duration = 0.0
                 
-                # We iterate over the midi events. 
-                # Since mid.play() is a blocking generator that respects delta times, we can write our own player loop
-                # to easily support pause/resume and time scrubbing.
-                messages = list(mid)
-                
                 i = 0
-                while i < len(messages) and not self.stop_event.is_set():
+                while i < len(self.playback_messages) and not self.stop_event.is_set():
                     # Support Pause
                     if not self.pause_event.is_set():
                         pause_start = time.time()
@@ -50,10 +61,7 @@ class MidiPlayer:
                         self.pause_event.wait()
                         accumulated_pause_duration += (time.time() - pause_start)
                     
-                    msg = messages[i]
-                    # Sleep for the message's delta time
-                    # We compare actual elapsed time with the message's absolute time to avoid time drift
-                    target_time = msg.time
+                    target_time, msg = self.playback_messages[i]
                     
                     while not self.stop_event.is_set():
                         # Wait for pause if triggered during sleep
@@ -76,7 +84,7 @@ class MidiPlayer:
                     if self.port and not msg.is_meta:
                         self.port.send(msg)
                         
-                    self._current_time = msg.time
+                    self._current_time = target_time
                     if on_progress_callback:
                         on_progress_callback(self._current_time, self._total_time)
                         
