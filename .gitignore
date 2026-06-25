@@ -30,4 +30,5 @@ backup_v1/
 # Private Data & Configs
 **/conversations/
 **/config.json
+**/nas_config.json
 versions.json

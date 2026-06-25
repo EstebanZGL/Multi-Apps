@@ -13,6 +13,8 @@ import cv2
 import numpy as np
 import mido
 from PIL import Image, ImageTk
+from .midi_player import MidiPlayer
+from .nas_client import load_nas_config, save_nas_config, test_nas_connection, upload_midi_to_nas
 
 # IA Model URL (Zenodo)
 MODEL_URL = "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
@@ -34,9 +36,10 @@ MIDI_NOTES_ALL = {n: f"{midi_to_note_name(n)} ({n})" for n in range(21, 109)}
 
 
 class NewVideoEngine(ctk.CTkFrame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, midia_app=None):
         super().__init__(parent, fg_color="transparent")
         self.controller = controller
+        self.midia_app = midia_app
         
         # Application state
         self.video_path = None
@@ -731,8 +734,11 @@ class NewVideoEngine(ctk.CTkFrame):
                 elif msg[0] == 'success':
                     self.progress_bar.set(1.0)
                     self.lbl_status.configure(text="Fichier MIDI sauvegardé !", text_color="#10B981")
-                    if messagebox.askyesno("Succès", f"Fichier MIDI généré :\n{msg[1]}\n\nOuvrir le dossier ?"):
-                        os.startfile(os.path.dirname(msg[1]))
+                    if self.midia_app:
+                        self.midia_app._on_success(msg[1])
+                    else:
+                        if messagebox.askyesno("Succès", f"Fichier MIDI généré :\n{msg[1]}\n\nOuvrir le dossier ?"):
+                            os.startfile(os.path.dirname(msg[1]))
                     self.finalize_transcription()
                 elif msg[0] == 'cancelled':
                     self.progress_bar.set(0)
@@ -798,6 +804,7 @@ class MIDIaApp(ctk.CTkFrame):
         header.pack(fill="x", padx=20, pady=(15, 5))
         ctk.CTkButton(header, text="🏠 Menu", width=80, command=lambda: self.controller.show_menu()).pack(side="left")
         ctk.CTkLabel(header, text="MIDIa - Transcription Studio", font=ctk.CTkFont(size=22, weight="bold")).pack(side="left", expand=True, padx=(0, 20))
+        ctk.CTkButton(header, text="⚙️ NAS", width=80, fg_color="#475569", hover_color="#334155", command=self._open_nas_config_dialog).pack(side="right")
 
         self.tabview = ctk.CTkTabview(self, segmented_button_selected_color="#E07A5F", segmented_button_unselected_hover_color="#3a3a50")
         self.tabview.pack(fill="both", expand=True, padx=20, pady=10)
@@ -807,7 +814,7 @@ class MIDIaApp(ctk.CTkFrame):
         tab_video = self.tabview.add("📹 Vidéo (Calque)")
 
         # Integrate the new engine
-        self.new_engine = NewVideoEngine(tab_new_video, self.controller)
+        self.new_engine = NewVideoEngine(tab_new_video, self.controller, self)
         self.new_engine.pack(fill="both", expand=True)
 
         self._build_audio_tab(tab_audio)
@@ -1321,7 +1328,208 @@ class MIDIaApp(ctk.CTkFrame):
     def _update_status(self, msg): self.after(0, lambda: self.status_label.configure(text=msg))
 
     def _on_success(self, p):
-        self._set_ui_processing(False); self.status_label.configure(text="Terminé !")
-        if messagebox.askyesno("Succès", f"Généré :\n{p}\n\nOuvrir ?"): os.startfile(os.path.dirname(p))
+        self._set_ui_processing(False)
+        self.status_label.configure(text="Terminé !")
+        self._open_midi_player_dialog(p)
 
     def _on_error(self, err): self._set_ui_processing(False); self.status_label.configure(text="Erreur."); messagebox.showerror("Erreur", err)
+
+    def _open_nas_config_dialog(self):
+        config = load_nas_config()
+        
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Configuration NAS (WebDAV / Nextcloud)")
+        dialog.geometry("500x380")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center dialog relative to parent window
+        dialog.update_idletasks()
+        
+        ctk.CTkLabel(dialog, text="Paramètres de connexion NAS", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(15, 10))
+        
+        f_url = ctk.CTkFrame(dialog, fg_color="transparent")
+        f_url.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(f_url, text="URL WebDAV :", width=120, anchor="w").pack(side="left")
+        entry_url = ctk.CTkEntry(f_url, width=320)
+        entry_url.insert(0, config.get("url", ""))
+        entry_url.pack(side="left")
+        
+        f_user = ctk.CTkFrame(dialog, fg_color="transparent")
+        f_user.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(f_user, text="Utilisateur :", width=120, anchor="w").pack(side="left")
+        entry_user = ctk.CTkEntry(f_user, width=320)
+        entry_user.insert(0, config.get("username", ""))
+        entry_user.pack(side="left")
+        
+        f_pass = ctk.CTkFrame(dialog, fg_color="transparent")
+        f_pass.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(f_pass, text="Mot de passe :", width=120, anchor="w").pack(side="left")
+        entry_pass = ctk.CTkEntry(f_pass, show="*", width=320)
+        entry_pass.insert(0, config.get("password", ""))
+        entry_pass.pack(side="left")
+        
+        f_folder = ctk.CTkFrame(dialog, fg_color="transparent")
+        f_folder.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(f_folder, text="Dossier cible :", width=120, anchor="w").pack(side="left")
+        entry_folder = ctk.CTkEntry(f_folder, width=320)
+        entry_folder.insert(0, config.get("folder", ""))
+        entry_folder.pack(side="left")
+        
+        lbl_status = ctk.CTkLabel(dialog, text="", text_color="gray", font=ctk.CTkFont(slant="italic"))
+        lbl_status.pack(pady=5)
+        
+        def run_test():
+            test_config = {
+                "url": entry_url.get(),
+                "username": entry_user.get(),
+                "password": entry_pass.get(),
+                "folder": entry_folder.get()
+            }
+            lbl_status.configure(text="Test en cours...", text_color="gray")
+            dialog.update()
+            success, msg = test_nas_connection(test_config)
+            if success:
+                lbl_status.configure(text=msg, text_color="#10B981")
+            else:
+                lbl_status.configure(text=msg, text_color="red")
+                
+        def run_save():
+            new_config = {
+                "url": entry_url.get(),
+                "username": entry_user.get(),
+                "password": entry_pass.get(),
+                "folder": entry_folder.get()
+            }
+            if save_nas_config(new_config):
+                messagebox.showinfo("Succès", "Configuration enregistrée avec succès !")
+                dialog.destroy()
+            else:
+                messagebox.showerror("Erreur", "Impossible de sauvegarder la configuration.")
+                
+        f_buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        f_buttons.pack(fill="x", padx=20, pady=15)
+        ctk.CTkButton(f_buttons, text="Tester la connexion", fg_color="#475569", hover_color="#334155", command=run_test).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(f_buttons, text="Enregistrer", fg_color="#E07A5F", hover_color="#D16043", command=run_save).pack(side="right")
+
+    def _open_midi_player_dialog(self, midi_path):
+        MidiPlayerDialog(self, midi_path)
+
+
+class MidiPlayerDialog(ctk.CTkToplevel):
+    def __init__(self, parent, midi_path):
+        super().__init__(parent)
+        self.parent = parent
+        self.midi_path = midi_path
+        
+        self.player = MidiPlayer()
+        self.nas_config = load_nas_config()
+        
+        self.title("Lecteur MIDI de vérification")
+        self.geometry("450x300")
+        self.transient(parent)
+        self.grab_set()
+        
+        # Stop player on window close
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # UI
+        ctk.CTkLabel(self, text="Vérification de la transcription MIDI", font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(15, 10))
+        
+        filename = os.path.basename(midi_path)
+        ctk.CTkLabel(self, text=filename, font=ctk.CTkFont(size=12, slant="italic"), text_color="gray").pack(pady=(0, 15))
+        
+        # Player controls frame
+        f_play = ctk.CTkFrame(self, fg_color="transparent")
+        f_play.pack(fill="x", padx=40, pady=10)
+        
+        self.btn_play_pause = ctk.CTkButton(f_play, text="▶ Jouer", width=120, fg_color="#10B981", hover_color="#059669", command=self.toggle_play_pause)
+        self.btn_play_pause.pack(side="left", padx=(0, 10))
+        
+        self.btn_stop = ctk.CTkButton(f_play, text="⏹ Arrêter", width=120, fg_color="#EF4444", hover_color="#DC2626", state="disabled", command=self.stop_playback)
+        self.btn_stop.pack(side="left", padx=(0, 10))
+        
+        # Time progress label
+        self.lbl_time = ctk.CTkLabel(self, text="00:00 / --:--", font=ctk.CTkFont(size=12))
+        self.lbl_time.pack(pady=5)
+        
+        # NAS upload section
+        self.f_nas = ctk.CTkFrame(self, fg_color="transparent")
+        self.f_nas.pack(fill="x", padx=40, pady=15)
+        
+        self.btn_nas = ctk.CTkButton(self.f_nas, text="☁ Téléverser vers le NAS", fg_color="#E07A5F", hover_color="#D16043", command=self.start_nas_upload)
+        self.btn_nas.pack(fill="x")
+        
+        self.lbl_nas_status = ctk.CTkLabel(self.f_nas, text="", text_color="gray", font=ctk.CTkFont(size=11, slant="italic"))
+        self.lbl_nas_status.pack(pady=5)
+        
+        # Auto-detect if password is set to enable/disable NAS upload button
+        if not self.nas_config.get("password"):
+            self.btn_nas.configure(state="disabled")
+            self.lbl_nas_status.configure(text="Configurez le NAS (bouton ⚙️ NAS) pour activer l'envoi.")
+            
+        self.update_timer_loop()
+
+    def toggle_play_pause(self):
+        if not self.player.is_playing():
+            # Play
+            self.player.play(self.midi_path, on_progress_callback=self.on_player_progress)
+            self.btn_play_pause.configure(text="⏸ Pause", fg_color="#F59E0B", hover_color="#D97706")
+            self.btn_stop.configure(state="normal")
+        elif self.player.is_paused():
+            # Resume
+            self.player.resume()
+            self.btn_play_pause.configure(text="⏸ Pause", fg_color="#F59E0B", hover_color="#D97706")
+        else:
+            # Pause
+            self.player.pause()
+            self.btn_play_pause.configure(text="▶ Continuer", fg_color="#10B981", hover_color="#059669")
+
+    def stop_playback(self):
+        self.player.stop()
+        self.btn_play_pause.configure(text="▶ Jouer", fg_color="#10B981", hover_color="#059669")
+        self.btn_stop.configure(state="disabled")
+        self.lbl_time.configure(text="00:00 / --:--")
+
+    def on_player_progress(self, current, total):
+        def update_ui():
+            if not self.winfo_exists(): return
+            cur_min, cur_sec = divmod(int(current), 60)
+            tot_min, tot_sec = divmod(int(total), 60)
+            self.lbl_time.configure(text=f"{cur_min:02d}:{cur_sec:02d} / {tot_min:02d}:{tot_sec:02d}")
+            if current == 0.0 and not self.player.is_playing():
+                self.btn_play_pause.configure(text="▶ Jouer", fg_color="#10B981", hover_color="#059669")
+                self.btn_stop.configure(state="disabled")
+        self.parent.after(0, update_ui)
+
+    def update_timer_loop(self):
+        if self.winfo_exists():
+            if self.player.is_playing():
+                current, total = self.player.get_progress()
+                cur_min, cur_sec = divmod(int(current), 60)
+                tot_min, tot_sec = divmod(int(total), 60)
+                self.lbl_time.configure(text=f"{cur_min:02d}:{cur_sec:02d} / {tot_min:02d}:{tot_sec:02d}")
+            self.after(500, self.update_timer_loop)
+
+    def start_nas_upload(self):
+        self.btn_nas.configure(state="disabled")
+        self.lbl_nas_status.configure(text="Téléversement en cours...", text_color="gray")
+        
+        def run_upload():
+            try:
+                upload_midi_to_nas(self.midi_path, self.nas_config)
+                def success_ui():
+                    self.lbl_nas_status.configure(text="Téléversé avec succès !", text_color="#10B981")
+                self.parent.after(0, success_ui)
+            except Exception as e:
+                def error_ui():
+                    self.lbl_nas_status.configure(text=f"Erreur: {str(e)}", text_color="red")
+                    self.btn_nas.configure(state="normal")
+                self.parent.after(0, error_ui)
+                
+        threading.Thread(target=run_upload, daemon=True).start()
+
+    def on_close(self):
+        self.player.stop()
+        self.grab_release()
+        self.destroy()
