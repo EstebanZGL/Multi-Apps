@@ -1424,9 +1424,10 @@ class MidiPlayerDialog(ctk.CTkToplevel):
         
         self.player = MidiPlayer()
         self.nas_config = load_nas_config()
+        self.prev_active_notes = set()
         
         self.title("Lecteur MIDI de vérification")
-        self.geometry("450x300")
+        self.geometry("760x440")
         self.transient(parent)
         self.grab_set()
         
@@ -1437,14 +1438,54 @@ class MidiPlayerDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Vérification de la transcription MIDI", font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(15, 10))
         
         filename = os.path.basename(midi_path)
-        ctk.CTkLabel(self, text=filename, font=ctk.CTkFont(size=12, slant="italic"), text_color="gray").pack(pady=(0, 15))
+        ctk.CTkLabel(self, text=filename, font=ctk.CTkFont(size=12, slant="italic"), text_color="gray").pack(pady=(0, 5))
+        
+        # Canvas for piano keyboard
+        self.canvas = tk.Canvas(self, width=728, height=80, bg="#0F172A", highlightthickness=0)
+        self.canvas.pack(pady=10)
+        
+        # Draw keys and store item IDs
+        self.key_rects = {}
+        
+        w_key_w = 14
+        w_key_h = 80
+        b_key_w = 8
+        b_key_h = 48
+        
+        # 1. Draw white keys (notes 21 to 108)
+        white_notes = [n for n in range(21, 109) if is_midi_note_white(n)]
+        for w_idx, note in enumerate(white_notes):
+            x1 = w_idx * w_key_w
+            x2 = x1 + w_key_w
+            y1 = 0
+            y2 = w_key_h
+            rect_id = self.canvas.create_rectangle(
+                x1, y1, x2, y2,
+                fill="#FFFFFF", outline="#CBD5E1", width=1
+            )
+            self.key_rects[note] = rect_id
+            
+        # 2. Draw black keys (notes 21 to 108)
+        for note in range(21, 109):
+            if not is_midi_note_white(note):
+                if note - 1 in white_notes:
+                    center_x = (white_notes.index(note - 1) + 1) * w_key_w
+                    x1 = center_x - b_key_w / 2
+                    x2 = center_x + b_key_w / 2
+                    y1 = 0
+                    y2 = b_key_h
+                    rect_id = self.canvas.create_rectangle(
+                        x1, y1, x2, y2,
+                        fill="#1E293B", outline="#0F172A", width=1
+                    )
+                    self.key_rects[note] = rect_id
         
         # Player controls frame
         f_play = ctk.CTkFrame(self, fg_color="transparent")
         f_play.pack(fill="x", padx=40, pady=10)
         
         self.btn_play_pause = ctk.CTkButton(f_play, text="▶ Jouer", width=120, fg_color="#10B981", hover_color="#059669", command=self.toggle_play_pause)
-        self.btn_play_pause.pack(side="left", padx=(0, 10))
+        self.btn_play_pause.pack(side="left", padx=(210, 10))
         
         self.btn_stop = ctk.CTkButton(f_play, text="⏹ Arrêter", width=120, fg_color="#EF4444", hover_color="#DC2626", state="disabled", command=self.stop_playback)
         self.btn_stop.pack(side="left", padx=(0, 10))
@@ -1455,7 +1496,7 @@ class MidiPlayerDialog(ctk.CTkToplevel):
         
         # NAS upload section
         self.f_nas = ctk.CTkFrame(self, fg_color="transparent")
-        self.f_nas.pack(fill="x", padx=40, pady=15)
+        self.f_nas.pack(fill="x", padx=40, pady=10)
         
         self.btn_nas = ctk.CTkButton(self.f_nas, text="☁ Téléverser vers le NAS", fg_color="#E07A5F", hover_color="#D16043", command=self.start_nas_upload)
         self.btn_nas.pack(fill="x")
@@ -1509,7 +1550,22 @@ class MidiPlayerDialog(ctk.CTkToplevel):
                 cur_min, cur_sec = divmod(int(current), 60)
                 tot_min, tot_sec = divmod(int(total), 60)
                 self.lbl_time.configure(text=f"{cur_min:02d}:{cur_sec:02d} / {tot_min:02d}:{tot_sec:02d}")
-            self.after(500, self.update_timer_loop)
+            
+            # Update piano keys highlight
+            active_notes = self.player.get_active_notes()
+            if active_notes != self.prev_active_notes:
+                for note, rect_id in self.key_rects.items():
+                    was_active = note in self.prev_active_notes
+                    is_active = note in active_notes
+                    if was_active != is_active:
+                        if is_midi_note_white(note):
+                            color = "#10B981" if is_active else "#FFFFFF"
+                        else:
+                            color = "#EF4444" if is_active else "#1E293B"
+                        self.canvas.itemconfigure(rect_id, fill=color)
+                self.prev_active_notes = active_notes
+                
+            self.after(30, self.update_timer_loop)
 
     def start_nas_upload(self):
         self.btn_nas.configure(state="disabled")
