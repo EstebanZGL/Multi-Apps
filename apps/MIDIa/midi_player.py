@@ -8,9 +8,11 @@ def send_mci(cmd):
     buf = ctypes.create_unicode_buffer(256)
     res = ctypes.windll.winmm.mciSendStringW(cmd, buf, 256, 0)
     if res != 0:
-        err_buf = ctypes.create_unicode_buffer(256)
-        ctypes.windll.winmm.mciGetErrorStringW(res, err_buf, 256)
-        print(f"MCI Error for '{cmd}': {err_buf.value}")
+        # Avoid console spam when device is closed/closing (errors like 263, 296, 305)
+        if res not in [263, 296, 305]:
+            err_buf = ctypes.create_unicode_buffer(256)
+            ctypes.windll.winmm.mciGetErrorStringW(res, err_buf, 256)
+            print(f"MCI Error for '{cmd}': {err_buf.value}")
         return None
     return buf.value.strip()
 

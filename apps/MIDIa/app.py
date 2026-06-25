@@ -138,12 +138,12 @@ class NewVideoEngine(ctk.CTkFrame):
         # --- Section 3: Detection Parameters ---
         ctk.CTkLabel(container, text="3. Paramètres de Détection", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(15,0))
         
-        self.thresh_val = ctk.IntVar(value=50)
+        self.thresh_val = ctk.IntVar(value=75)
         t_frame = ctk.CTkFrame(container, fg_color="transparent")
         t_frame.pack(fill="x")
         ctk.CTkLabel(t_frame, text="Sensibilité (Diff):").pack(side="left")
         ctk.CTkLabel(t_frame, textvariable=self.thresh_val, text_color="#10B981").pack(side="right")
-        self.scale_thresh = ctk.CTkSlider(container, from_=10, to=150, variable=self.thresh_val, command=lambda v: self.update_frame_preview())
+        self.scale_thresh = ctk.CTkSlider(container, from_=10, to=250, variable=self.thresh_val, command=lambda v: self.update_frame_preview())
         self.scale_thresh.pack(fill="x", pady=5)
         
         self.wy_val = ctk.IntVar(value=75)
@@ -514,7 +514,8 @@ class NewVideoEngine(ctk.CTkFrame):
                 curr_color = self.get_neighborhood_color(warped_frame, cx, cy)
                 idle_color = self.idle_colors[note]
                 dist = np.sqrt((curr_color[0] - idle_color[0])**2 + (curr_color[1] - idle_color[1])**2 + (curr_color[2] - idle_color[2])**2)
-                if dist > threshold: is_pressed = True
+                req_thresh = threshold * 1.5 if not is_midi_note_white(note) else threshold
+                if dist > req_thresh: is_pressed = True
             
             is_white = is_midi_note_white(note)
             
@@ -676,7 +677,8 @@ class NewVideoEngine(ctk.CTkFrame):
                 idle_color = idle_colors[note]
                 
                 dist = np.sqrt((curr_color[0] - idle_color[0])**2 + (curr_color[1] - idle_color[1])**2 + (curr_color[2] - idle_color[2])**2)
-                is_active_now = dist > threshold
+                req_thresh = threshold * 1.5 if not is_midi_note_white(note) else threshold
+                is_active_now = dist > req_thresh
                 
                 history = note_states[note]['history']
                 history.append(is_active_now)
